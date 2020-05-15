@@ -3,15 +3,7 @@
   xmlns:xhtml="http://www.w3.org/1999/xhtml">
   
   <url>
-    <loc>http://kyong-dev.github.io/categories/</loc>
-  </url>
-  
-  <url>
-    <loc>http://kyong-dev.github.io/</loc>
-  </url>
-  
-  <url>
-    <loc>http://kyong-dev.github.io/tags/</loc>
+    <loc>/</loc>
   </url>
   
 </urlset>
