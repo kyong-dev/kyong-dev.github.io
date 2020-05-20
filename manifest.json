@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "short_name": "",
+  "name": "My Blog",
+  "short_name": "My Blog",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

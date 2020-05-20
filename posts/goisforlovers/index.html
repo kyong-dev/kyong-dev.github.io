@@ -12,14 +12,12 @@ This document is a brief primer on using Go templates." />
 <meta property="og:type" content="article" />
 <meta property="og:url" content="/posts/goisforlovers/" />
 <meta property="article:published_time" content="2014-04-02T00:00:00+00:00" />
-<meta property="article:modified_time" content="2020-05-16T12:43:05+10:00" />
-<title>(Hu)go Template Primer | </title>
+<meta property="article:modified_time" content="2020-05-16T12:43:05+10:00" /><meta property="og:site_name" content="My Blog" />
+<title>(Hu)go Template Primer | My Blog</title>
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/favicon.png" type="image/x-icon">
 <link rel="stylesheet" href="/book.min.6df681b0bb21155cba49f6078e3559216772d8e03e780d240c73ea21817ed5e5.css" integrity="sha256-bfaBsLshFVy6SfYHjjVZIWdy2OA&#43;eA0kDHPqIYF&#43;1eU=">
-<script defer src="/en.search.min.6bed001ecd1e9690d052fdee1a8e2bc44d8c11415a692208e8dd56046fe584af.js" integrity="sha256-a&#43;0AHs0elpDQUv3uGo4rxE2MEUFaaSII6N1WBG/lhK8="></script>
-
-<script defer src="/sw.min.74a8bb07f0bee86d6bb9a2750f073f14d93c7e4512f28860370cfd879e9719b4.js" integrity="sha256-dKi7B/C&#43;6G1ruaJ1Dwc/FNk8fkUS8ohgNwz9h56XGbQ="></script>
+<script defer src="/en.search.min.d481f79891686f998049b8eb4b2cf27c461bdcd0a405865956cc42f92180b1f5.js" integrity="sha256-1IH3mJFob5mASbjrSyzyfEYb3NCkBYZZVsxC&#43;SGAsfU="></script>
 <!--
 Made with Book Theme
 https://github.com/alex-shpak/hugo-book
@@ -35,7 +33,7 @@ https://github.com/alex-shpak/hugo-book
       
   <nav>
 <h2 class="book-brand">
-  <a href="/"><img src="/logo.png" alt="Logo" /><span></span>
+  <a href="/"><img src="/logo.png" alt="Logo" /><span>My Blog</span>
   </a>
 </h2>
 
@@ -58,32 +56,24 @@ https://github.com/alex-shpak/hugo-book
 
   <ul>
 <li>
-<p>
-  <a href="/posts/">Blog</a></p>
+<p><a href="/posts/">Blog</a></p>
 </li>
 <li>
-<p>
-  <a href="/docs/example/"><strong>Example Site</strong></a></p>
+<p><a href="/docs/example/"><strong>Example Site</strong></a></p>
 </li>
 <li>
-<p>
-  <a href="/docs/example/table-of-contents/">Table of Contents</a></p>
+<p><a href="/docs/example/table-of-contents/">Table of Contents</a></p>
 <ul>
-<li>
-  <a href="/docs/example/table-of-contents/with-toc/">With ToC</a></li>
-<li>
-  <a href="/docs/example/table-of-contents/without-toc/">Without ToC</a></li>
+<li><a href="/docs/example/table-of-contents/with-toc/">With ToC</a></li>
+<li><a href="/docs/example/table-of-contents/without-toc/">Without ToC</a></li>
 </ul>
 </li>
 <li>
-<p>
-  <a href="/docs/example/collapsed/">Collapsed</a></p>
+<p><a href="/docs/example/collapsed/">Collapsed</a></p>
 <ul>
-<li>
-  <a href="/docs/example/collapsed/3rd-level/">3rd</a>
+<li><a href="/docs/example/collapsed/3rd-level/">3rd</a>
 <ul>
-<li>
-  <a href="/docs/example/collapsed/3rd-level/4th-level/">4th</a>
+<li><a href="/docs/example/collapsed/3rd-level/4th-level/">4th</a>
 <!-- raw HTML omitted --></li>
 </ul>
 </li>
@@ -93,32 +83,25 @@ https://github.com/alex-shpak/hugo-book
 <p><strong>Shortcodes</strong></p>
 </li>
 <li>
-<p>
-  <a href="/docs/shortcodes/buttons/">Buttons</a></p>
+<p><a href="/docs/shortcodes/buttons/">Buttons</a></p>
 </li>
 <li>
-<p>
-  <a href="/docs/shortcodes/columns/">Columns</a></p>
+<p><a href="/docs/shortcodes/columns/">Columns</a></p>
 </li>
 <li>
-<p>
-  <a href="/docs/shortcodes/expand/">Expand</a></p>
+<p><a href="/docs/shortcodes/expand/">Expand</a></p>
 </li>
 <li>
-<p>
-  <a href="/docs/shortcodes/hints/">Hints</a></p>
+<p><a href="/docs/shortcodes/hints/">Hints</a></p>
 </li>
 <li>
-<p>
-  <a href="/docs/shortcodes/katex/">Katex</a></p>
+<p><a href="/docs/shortcodes/katex/">Katex</a></p>
 </li>
 <li>
-<p>
-  <a href="/docs/shortcodes/mermaid/">Mermaid</a></p>
+<p><a href="/docs/shortcodes/mermaid/">Mermaid</a></p>
 </li>
 <li>
-<p>
-  <a href="/docs/shortcodes/tabs/">Tabs</a>
+<p><a href="/docs/shortcodes/tabs/">Tabs</a>
 <!-- raw HTML omitted --></p>
 </li>
 </ul>
@@ -211,7 +194,7 @@ https://github.com/alex-shpak/hugo-book
     <a href="/posts/goisforlovers/">(Hu)go Template Primer</a>
   </h1>
   
-  <h5>Apr 2, 2014</h5>
+  <h5>2 Apr 2014</h5>
 
 
 
@@ -220,16 +203,13 @@ https://github.com/alex-shpak/hugo-book
   
 
 
-  <p><p>Hugo uses the excellent 
-  <a href="https://golang.org/">Go</a> 
-  <a href="https://golang.org/pkg/html/template/">html/template</a> library for
+  <p><p>Hugo uses the excellent <a href="https://golang.org/">Go</a> <a href="https://golang.org/pkg/html/template/">html/template</a> library for
 its template engine. It is an extremely lightweight engine that provides a very
 small amount of logic. In our experience that it is just the right amount of
 logic to be able to create a good static website. If you have used other
 template systems from different languages or frameworks you will find a lot of
 similarities in Go templates.</p>
-<p>This document is a brief primer on using Go templates. The 
-  <a href="https://golang.org/pkg/html/template/">Go docs</a>
+<p>This document is a brief primer on using Go templates. The <a href="https://golang.org/pkg/html/template/">Go docs</a>
 provide more details.</p>
 <h2 id="introduction-to-go-templates">Introduction to Go Templates</h2>
 <p>Go templates provide an extremely simple template language. It adheres to the
@@ -237,8 +217,7 @@ belief that only the most basic of logic belongs in the template or view layer.
 One consequence of this simplicity is that Go templates parse very quickly.</p>
 <p>A unique characteristic of Go templates is they are content aware. Variables and
 content will be sanitized depending on the context of where they are used. More
-details can be found in the 
-  <a href="https://golang.org/pkg/html/template/">Go docs</a>.</p>
+details can be found in the <a href="https://golang.org/pkg/html/template/">Go docs</a>.</p>
 <h2 id="basic-syntax">Basic Syntax</h2>
 <p>Golang templates are HTML files with the addition of variables and
 functions.</p>
@@ -261,8 +240,7 @@ functions.</p>
 <p>Each Go template has a struct (object) made available to it. In hugo each
 template is passed either a page or a node struct depending on which type of
 page you are rendering. More details are available on the
-
-  <a href="/layout/variables">variables</a> page.</p>
+<a href="/layout/variables">variables</a> page.</p>
 <p>A variable is accessed by referencing the variable name.</p>
 <pre><code>&lt;title&gt;{{ .Title }}&lt;/title&gt;
 </code></pre>
@@ -273,8 +251,7 @@ page you are rendering. More details are available on the
 <h2 id="functions">Functions</h2>
 <p>Go template ship with a few functions which provide basic functionality. The Go
 template system also provides a mechanism for applications to extend the
-available functions with their own. 
-  <a href="/layout/functions">Hugo template
+available functions with their own. <a href="/layout/functions">Hugo template
 functions</a> provide some additional functionality we believe
 are useful for building websites. Functions are called by using their name
 followed by the required parameters separated by spaces. Template
@@ -405,8 +382,7 @@ type (supported by your front matter/config format) and use them however
 you want to inside of your templates.</p>
 <h2 id="using-content-page-parameters">Using Content (page) Parameters</h2>
 <p>In each piece of content you can provide variables to be used by the
-templates. This happens in the 
-  <a href="/content/front-matter">front matter</a>.</p>
+templates. This happens in the <a href="/content/front-matter">front matter</a>.</p>
 <p>An example of this is used in this documentation site. Most of the pages
 benefit from having the table of contents provided. Sometimes the TOC just
 doesn&rsquo;t make a lot of sense. We&rsquo;ve defined a variable in our front matter
@@ -469,11 +445,48 @@ so, such as in this example:</p>
         
   <div class="flex flex-wrap justify-between">
 
+  
 
 
-  <div><a class="flex align-center" href="https://github.com/alex-shpak/hugo-book/commit/f5cdb0c572db2ed7d2ee097bde021d7ef43c2057" title='Last modified by kyong | May 16, 2020' target="_blank" rel="noopener">
+  
+
+  
+
+
+
+<div class="book-languages" tabindex="0" aria-haspopup="true">
+  <ul>
+    <li class="flex align-center">
+      <img src="/svg/translate.svg" class="book-icon" alt="Languages" />
+      English
+    </li> 
+  </ul>
+
+  <ul class="book-languages-list">
+    
+    <li class="active">
+      <a href="/" class="flex align-center">
+        <img src="/svg/translate.svg" class="book-icon" alt="Languages" />
+        English
+      </a>
+    </li>
+    
+    <li class="">
+      <a href="/ko/" class="flex align-center">
+        <img src="/svg/translate.svg" class="book-icon" alt="Languages" />
+        Korean
+      </a>
+    </li>
+    
+  </ul>
+</div>
+
+
+
+
+  <div><a class="flex align-center" href="https://github.com/alex-shpak/hugo-book/commit/f5cdb0c572db2ed7d2ee097bde021d7ef43c2057" title='Last modified by kyong | 16 May 2020' target="_blank" rel="noopener">
       <img src="/svg/calendar.svg" class="book-icon" alt="Calendar" />
-      <span>May 16, 2020</span>
+      <span>16 May 2020</span>
     </a>
   </div>
 
