@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+  xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  
+  <url>
+    <loc>/kr/posts/python/</loc>
+    <lastmod>2020-06-12T14:35:29+10:00</lastmod>
+  </url>
+  
+  <url>
+    <loc>/kr/posts/python2/</loc>
+    <lastmod>2020-06-12T14:35:29+10:00</lastmod>
+  </url>
+  
+  <url>
+    <loc>/kr/posts/python3/</loc>
+    <lastmod>2020-06-12T14:35:29+10:00</lastmod>
+  </url>
+  
+  <url>
+    <loc>/kr/posts/python4/</loc>
+    <lastmod>2020-06-12T14:35:29+10:00</lastmod>
+  </url>
+  
+  <url>
+    <loc>/kr/posts/python5/</loc>
+    <lastmod>2020-06-12T14:35:29+10:00</lastmod>
+  </url>
+  
+  <url>
+    <loc>/kr/posts/python6/</loc>
+    <lastmod>2020-06-12T14:35:29+10:00</lastmod>
+  </url>
+  
+  <url>
+    <loc>/kr/</loc>
+    <lastmod>2020-06-12T14:35:29+10:00</lastmod>
+    <xhtml:link
+                rel="alternate"
+                hreflang="en"
+                href="/"
+                />
+    <xhtml:link
+                rel="alternate"
+                hreflang="kr"
+                href="/kr/"
+                />
+  </url>
+  
+  <url>
+    <loc>/kr/posts/</loc>
+    <lastmod>2020-06-12T14:35:29+10:00</lastmod>
+    <xhtml:link
+                rel="alternate"
+                hreflang="en"
+                href="/posts/"
+                />
+    <xhtml:link
+                rel="alternate"
+                hreflang="kr"
+                href="/kr/posts/"
+                />
+  </url>
+  
+</urlset>

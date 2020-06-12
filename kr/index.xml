@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>블로그</title>
+    <link>/kr/</link>
+    <description>Recent content on 블로그</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <lastBuildDate>Sat, 16 May 2020 00:00:00 +0000</lastBuildDate>
+    
+	<atom:link href="/kr/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>Python 개발 가상환경 구축</title>
+      <link>/kr/posts/python/</link>
+      <pubDate>Sat, 16 May 2020 00:00:00 +0000</pubDate>
+      
+      <guid>/kr/posts/python/</guid>
+      <description>Python은 한 가지에 중점 되어 있지 않고 다방면(웹, 모바일, 데스크탑)에서 사용이 가능한 프로그래밍 언어이며, 설치하기 쉽고 복잡하지 않아 개발자 뿐만 아니라 초보자들에게도 사용하기 적절한 언어입니다. 현재 2020년 5월 기준 Python 3이 가장 최신 버전입니다.
+자, 이제 리눅스 환경에서 파이썬3 개발용 가상환경을 터미널을 이용해 세팅을 해볼 겁니다. 이 글에 사용되는 OS는 Ubuntu 18.04 lts 버전이며 다른 Debian Linux 환경에도 똑같이 적용이 가능합니다.
+1단계 - Python 3 설치 python 마우스를 이용해 브라우저를 통해 설치 하는 방법보다 터미널 이용해 간단한 명령어를 입력시켜 설치를 해 볼 것입니다.</description>
+    </item>
+    
+    <item>
+      <title>Python 개발 가상환경 구축</title>
+      <link>/kr/posts/python2/</link>
+      <pubDate>Sat, 16 May 2020 00:00:00 +0000</pubDate>
+      
+      <guid>/kr/posts/python2/</guid>
+      <description>Python은 한 가지에 중점 되어 있지 않고 다방면(웹, 모바일, 데스크탑)에서 사용이 가능한 프로그래밍 언어이며, 설치하기 쉽고 복잡하지 않아 개발자 뿐만 아니라 초보자들에게도 사용하기 적절한 언어입니다. 현재 2020년 5월 기준 Python 3이 가장 최신 버전입니다.
+자, 이제 리눅스 환경에서 파이썬3 개발용 가상환경을 터미널을 이용해 세팅을 해볼 겁니다. 이 글에 사용되는 OS는 Ubuntu 18.04 lts 버전이며 다른 Debian Linux 환경에도 똑같이 적용이 가능합니다.
+1단계 - Python 3 설치 python 마우스를 이용해 브라우저를 통해 설치 하는 방법보다 터미널 이용해 간단한 명령어를 입력시켜 설치를 해 볼 것입니다.</description>
+    </item>
+    
+    <item>
+      <title>Python 개발 가상환경 구축</title>
+      <link>/kr/posts/python3/</link>
+      <pubDate>Sat, 16 May 2020 00:00:00 +0000</pubDate>
+      
+      <guid>/kr/posts/python3/</guid>
+      <description>Python은 한 가지에 중점 되어 있지 않고 다방면(웹, 모바일, 데스크탑)에서 사용이 가능한 프로그래밍 언어이며, 설치하기 쉽고 복잡하지 않아 개발자 뿐만 아니라 초보자들에게도 사용하기 적절한 언어입니다. 현재 2020년 5월 기준 Python 3이 가장 최신 버전입니다.
+자, 이제 리눅스 환경에서 파이썬3 개발용 가상환경을 터미널을 이용해 세팅을 해볼 겁니다. 이 글에 사용되는 OS는 Ubuntu 18.04 lts 버전이며 다른 Debian Linux 환경에도 똑같이 적용이 가능합니다.
+1단계 - Python 3 설치 python 마우스를 이용해 브라우저를 통해 설치 하는 방법보다 터미널 이용해 간단한 명령어를 입력시켜 설치를 해 볼 것입니다.</description>
+    </item>
+    
+    <item>
+      <title>Python 개발 가상환경 구축</title>
+      <link>/kr/posts/python4/</link>
+      <pubDate>Sat, 16 May 2020 00:00:00 +0000</pubDate>
+      
+      <guid>/kr/posts/python4/</guid>
+      <description>Python은 한 가지에 중점 되어 있지 않고 다방면(웹, 모바일, 데스크탑)에서 사용이 가능한 프로그래밍 언어이며, 설치하기 쉽고 복잡하지 않아 개발자 뿐만 아니라 초보자들에게도 사용하기 적절한 언어입니다. 현재 2020년 5월 기준 Python 3이 가장 최신 버전입니다.
+자, 이제 리눅스 환경에서 파이썬3 개발용 가상환경을 터미널을 이용해 세팅을 해볼 겁니다. 이 글에 사용되는 OS는 Ubuntu 18.04 lts 버전이며 다른 Debian Linux 환경에도 똑같이 적용이 가능합니다.
+1단계 - Python 3 설치 python 마우스를 이용해 브라우저를 통해 설치 하는 방법보다 터미널 이용해 간단한 명령어를 입력시켜 설치를 해 볼 것입니다.</description>
+    </item>
+    
+    <item>
+      <title>Python 개발 가상환경 구축</title>
+      <link>/kr/posts/python5/</link>
+      <pubDate>Sat, 16 May 2020 00:00:00 +0000</pubDate>
+      
+      <guid>/kr/posts/python5/</guid>
+      <description>Python은 한 가지에 중점 되어 있지 않고 다방면(웹, 모바일, 데스크탑)에서 사용이 가능한 프로그래밍 언어이며, 설치하기 쉽고 복잡하지 않아 개발자 뿐만 아니라 초보자들에게도 사용하기 적절한 언어입니다. 현재 2020년 5월 기준 Python 3이 가장 최신 버전입니다.
+자, 이제 리눅스 환경에서 파이썬3 개발용 가상환경을 터미널을 이용해 세팅을 해볼 겁니다. 이 글에 사용되는 OS는 Ubuntu 18.04 lts 버전이며 다른 Debian Linux 환경에도 똑같이 적용이 가능합니다.
+1단계 - Python 3 설치 python 마우스를 이용해 브라우저를 통해 설치 하는 방법보다 터미널 이용해 간단한 명령어를 입력시켜 설치를 해 볼 것입니다.</description>
+    </item>
+    
+    <item>
+      <title>Python 개발 가상환경 구축</title>
+      <link>/kr/posts/python6/</link>
+      <pubDate>Sat, 16 May 2020 00:00:00 +0000</pubDate>
+      
+      <guid>/kr/posts/python6/</guid>
+      <description>Python은 한 가지에 중점 되어 있지 않고 다방면(웹, 모바일, 데스크탑)에서 사용이 가능한 프로그래밍 언어이며, 설치하기 쉽고 복잡하지 않아 개발자 뿐만 아니라 초보자들에게도 사용하기 적절한 언어입니다. 현재 2020년 5월 기준 Python 3이 가장 최신 버전입니다.
+자, 이제 리눅스 환경에서 파이썬3 개발용 가상환경을 터미널을 이용해 세팅을 해볼 겁니다. 이 글에 사용되는 OS는 Ubuntu 18.04 lts 버전이며 다른 Debian Linux 환경에도 똑같이 적용이 가능합니다.
+1단계 - Python 3 설치 python 마우스를 이용해 브라우저를 통해 설치 하는 방법보다 터미널 이용해 간단한 명령어를 입력시켜 설치를 해 볼 것입니다.</description>
+    </item>
+    
+  </channel>
+</rss>
