@@ -609,6 +609,9 @@ const Template = function ({
     content: "@\uC0AC\uC6A9\uC790\uC774\uB984"
   }), (0,emotion_react_esm/* jsx */.tZ)("html", {
     lang: "ko"
+  }), (0,emotion_react_esm/* jsx */.tZ)("meta", {
+    name: "google-site-verification",
+    content: "scpeTQZpagk5whGRkXKILJurpPr7lXcjQRlmH7fhmRw"
   })), (0,emotion_react_esm/* jsx */.tZ)(GlobalStyle/* default */.Z, null), children, (0,emotion_react_esm/* jsx */.tZ)(Common_Footer, null));
 };
 
