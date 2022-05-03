@@ -611,7 +611,7 @@ const Template = function ({
     lang: "ko"
   }), (0,emotion_react_esm/* jsx */.tZ)("meta", {
     name: "google-site-verification",
-    content: "scpeTQZpagk5whGRkXKILJurpPr7lXcjQRlmH7fhmRw"
+    content: "mxLB5KQ1bIs-cghvNL_zf24agGCJrgwP071JAKBpcDs"
   }), (0,emotion_react_esm/* jsx */.tZ)("meta", {
     name: "naver-site-verification",
     content: "6c2d92eb9a60002b277f46c4a7920deba060d353"
