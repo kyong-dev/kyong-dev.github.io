@@ -6,222 +6,65 @@ summary: '웹 크롤러, 창과 방패'
 thumbnail: ./web-crawler.png
 publicURL: https://kyong-dev.github.io
 ---
+# '웹 크롤러, 창과 방패'
 
-Thttps://blog.karatos.in/a?ID=01800-597233c2-611b-430a-aad7-07f05e5ccbf5
+Python으로 제작한 프로그램 중에 타오바오 사이트를 로그인해서 요청 헤더 쿠키값을 긁어와서 이용하는 부분이 있는데 몇주 전부터 크롬드라이버로 접속을 하게되면 슬라이더가 생겼었다. 원래 슬라이더를 셀레니움를 이용해 넘겨보려 했는데 어느부분을 클릭하려고 해도 unclickable이였다.. 구글링을 열심히 해보지만 해결책은 찾기 어려웠었다.
 
-> A salted duck egg is a Chinese preserved food product made by soaking duck
-> eggs in brine, or packing each egg in damp, salted charcoal. In Asian
-> supermarkets, these eggs are sometimes sold covered in a thick layer of salted
-> charcoal paste. The eggs may also be sold with the salted paste removed,
-> wrapped in plastic, and vacuum packed. From the salt curing process, the
-> salted duck eggs have a briny aroma, a gelatin-like egg white and a
-> firm-textured, round yolk that is bright orange-red in color.
+하지만 일반사용자 크롬으로 접속시엔 슬라이더가 생기지 않는 걸 보니 크롬드라이버 접속을 인식하는 걸까? 여러 웹사이트에 봇 유입 방지를 위해 여러 방책들이 있다.
 
-You can also write code blocks here!
+<br /><br />
+1. Javascript 스크립트를 심어 놓음.
+window.navigator.webdriver를 리턴하게 스크립트를 심어 놓으면 일반 크롬은 false로 응답하는 반면 크롬드라이버로 실행된 크롬에선 undefined로 리턴해서 봇 판별을 할 수 있다.
 
+하지만 이 부분은 옵션에 **'--disable-blick-features=AutomationControlled'** 를 추가하면 간단하게 해결 가능했다.
+
+```python
+from selenium import webdriver
+options = webdriver.ChromeOptions()
+options.add_argument('--disable-blick-features=AutomationControlled')
+```
+![Window Navigator Webdriver](./window-navigator-webdriver.png)
+
+<br /><br />
+2. clienthints, navigator.userAgentData 확인
+User Agent도 마찬가지로 웹드라이버 옵션에 추가해서 손쉽게 조작이 가능하다.
+
+```python
+from selenium import webdriver
+options = webdriver.ChromeOptions()
+options.add_argument('user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.54 Safari/537.36')
+```
+
+이렇게 작성만 해주면 Mac OS의 크롬 101.0.4951.54 버전으로 접속을 한 것으로 조작할 수 있다.
+
+![Fake User Agent](./user-agent.png)
+
+<br /><br />
+3. Chromedriver 탐지
+
+최신 크롬드라이버는 이 방법으로 탐지가 힘들다곤 하지만 크롬드라이버를 항상 최신으로 유지해주긴 힘들다. 
+일반 IDE로는 수정이 불가능걸로 알고있고 나같은 경운 Ubuntu(Linux) Vim을 이용해 Chromedriver를 수정해 주었다. (nano로는 수정은 되지만 저장을 하면 chromedriver가 -11 error를 내면서 작동 안됨)
+
+Chromedriver 내부에 call_function.js에서 이 부분을 수정해 줘야한다.
 ```js
-const saltyDuckEgg = "chinese preserved food product"
+var key = '$cdc_asdjflasutopfhvcZLmcfl_';
 ```
 
-| Number | Title                                    | Year |
-| :----- | :--------------------------------------- | ---: |
-| 1      | Harry Potter and the Philosopher’s Stone | 2001 |
-| 2      | Harry Potter and the Chamber of Secrets  | 2002 |
-| 3      | Harry Potter and the Prisoner of Azkaban | 2004 |
-
-[View raw (TEST.md)](https://raw.github.com/adamschwartz/github-markdown-kitchen-sink/master/README.md)
-
-This is a paragraph.
-
-    This is a paragraph.
-
-# Header 1
-
-## Header 2
-
-    Header 1
-    ========
-
-    Header 2
-    --------
-
-# Header 1
-
-## Header 2
-
-### Header 3
-
-#### Header 4
-
-##### Header 5
-
-###### Header 6
-
-    # Header 1
-    ## Header 2
-    ### Header 3
-    #### Header 4
-    ##### Header 5
-    ###### Header 6
-
-# Header 1
-
-## Header 2
-
-### Header 3
-
-#### Header 4
-
-##### Header 5
-
-###### Header 6
-
-    # Header 1 #
-    ## Header 2 ##
-    ### Header 3 ###
-    #### Header 4 ####
-    ##### Header 5 #####
-    ###### Header 6 ######
-
-> Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Aliquam hendrerit mi posuere lectus. Vestibulum enim wisi, viverra nec, fringilla in, laoreet vitae, risus.
-
-    > Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Aliquam hendrerit mi posuere lectus. Vestibulum enim wisi, viverra nec, fringilla in, laoreet vitae, risus.
-
-> ## This is a header.
->
-> 1. This is the first list item.
-> 2. This is the second list item.
->
-> Here's some example code:
->
->     Markdown.generate();
-
-    > ## This is a header.
-    > 1. This is the first list item.
-    > 2. This is the second list item.
-    >
-    > Here's some example code:
-    >
-    >     Markdown.generate();
-
-- Red
-- Green
-- Blue
-
-* Red
-* Green
-* Blue
-
-- Red
-- Green
-- Blue
-
-```markdown
-- Red
-- Green
-- Blue
-
-* Red
-* Green
-* Blue
-
-- Red
-- Green
-- Blue
+stackoverflow에 검색한 내용중에 key 값을 '/\$[a-z]dc_/' 정규식으로 필터링 한다고 하니 앞에 cdc부분을 전혀 다른 것으로 수정해주면 된다. 나 같은 경운 
+```js
+var key = '$cat_asdjflasutopfhvcZLmcfl_';
 ```
 
-- `code goes` here in this line
-- **bold** goes here
+으로 변경 해줬을 때 브라우저도 정상 작동하고 슬라이더가 사라졌다.
 
-```markdown
-- `code goes` here in this line
-- **bold** goes here
+Taobao말고 다른 타사이트들도 이 방법으로 봇 유입을 막는 것을 종종 봤다. Coinpan (코인 커뮤니티) 사이트도 막아놨던 것으로 기억한다.
+
+- Vim 사용법
+```bash
+vim chromedriver
 ```
-
-1. Buy flour and salt
-1. Mix together with water
-1. Bake
-
-```markdown
-1. Buy flour and salt
-1. Mix together with water
-1. Bake
-```
-
-1. `code goes` here in this line
-1. **bold** goes here
-
-```markdown
-1. `code goes` here in this line
-1. **bold** goes here
-```
-
-Paragraph:
-
-    Code
-
-<!-- -->
-
-    Paragraph:
-
-        Code
-
----
-
----
-
----
-
----
-
----
-
-    * * *
-
-    ***
-
-    *****
-
-    - - -
-
-    ---------------------------------------
-
-This is [an example](http://example.com "Example") link.
-
-[This link](http://example.com) has no title attr.
-
-This is [an example][id] reference-style link.
-
-[id]: http://example.com "Optional Title"
-
-    This is [an example](http://example.com "Example") link.
-
-    [This link](http://example.com) has no title attr.
-
-    This is [an example] [id] reference-style link.
-
-    [id]: http://example.com "Optional Title"
-
-_single asterisks_
-
-_single underscores_
-
-**double asterisks**
-
-**double underscores**
-
-    *single asterisks*
-
-    _single underscores_
-
-    **double asterisks**
-
-    __double underscores__
-
-This paragraph has some `code` in it.
-
-    This paragraph has some `code` in it.
-
-![Alt Text](https://placehold.it/200x50 "Image Title")
-
-    ![Alt Text](https://placehold.it/200x50 "Image Title")
+로 실행하면 다른 텍스트 에디터와 다르게 바로 수정이 가능하지 않고 단축키들을 사용해야 한다. 일단 <br />
+(1) **'/cdc'**를 타입해서 검색해준다. <br />
+(2) **'R'** 대문자 R을 입력하면 수정하면서 입력을 할 수 있는 모드로 변경된다 (텍스트 덮어씌우기) <br />
+(3) **'cdc'** 부분을 다른걸로 변경해준다. <br />
+(3) **':wp!'** 이렇게 치고 엔터를 치면 저장하면서 vim을 종료할 수 있다.
