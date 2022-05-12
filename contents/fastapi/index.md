@@ -1,6 +1,6 @@
 ---
 date: '2022-04-06'
-title: 'Looking for the Fastest Python API Framwork?'
+title: 'Looking for the Fastest Python API Framework?'
 categories: ['FastAPI', 'Python', 'Web Framework']
 summary: '장고? 플라스크? 이제는 FastAPI!'
 thumbnail: ./fastapi-image.png
