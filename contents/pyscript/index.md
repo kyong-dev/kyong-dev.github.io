@@ -6,12 +6,15 @@ summary: '프론트에서 파이썬을??'
 thumbnail: ./pyscript.webp
 publicURL: https://kyong-dev.github.io
 ---
+# '프론트에서 파이썬을??'
 
-This is my first post on my new fake blog! How exciting!
+- Python in the browser: Enable drop-in content, external file hosting (made possible by the Pyodide project, thank you!), and application hosting without the reliance on server-side configuration
+- Python ecosystem: Run many popular packages of Python and the scientific stack (such as numpy, pandas, scikit-learn, and more)
+- Python with JavaScript: Bi-directional communication between Python and Javascript objects and namespaces
+- Environment management: Allow users to define what packages and files to include for the page code to run
+- Visual application development: Use readily available curated UI components, such as buttons, containers, text boxes, and more
+- Flexible framework: A flexible framework that can be leveraged to create and share new pluggable and extensible components directly in Python
 
-I'm sure I'll write a lot more interesting things in the future.
-
-Oh, and here's a great quote from this Wikipedia on
 [salted duck eggs](https://en.wikipedia.org/wiki/Salted_duck_egg).
 
 > A salted duck egg is a Chinese preserved food product made by soaking duck
