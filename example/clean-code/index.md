@@ -43,6 +43,8 @@ publicURL: https://kyong-dev.github.io
 
 ## 3장. 함수
 1. 함수는 한 가지 일을 '잘' 해야 한다.
-2. 
+2. 함수 인수(argument, parameter) 는 최대한 적게 사용해라. 
+3. include 방법으로 중복을 없애라.
+4. 구조적 프로그래밍 원칙 - 함수는 return 문이 하나여야 하고 반복문에서 break나 continue를 사용해선 안 되면 goto는 '절대로' 안 된다.
 
-(2022-05-18)
+(2022-05-18, 2022-05-19)
