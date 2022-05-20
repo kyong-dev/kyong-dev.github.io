@@ -15,15 +15,12 @@ publicURL: https://kyong-dev.github.io
 - Visual application development: Use readily available curated UI components, such as buttons, containers, text boxes, and more
 - Flexible framework: A flexible framework that can be leveraged to create and share new pluggable and extensible components directly in Python
 
-[salted duck eggs](https://en.wikipedia.org/wiki/Salted_duck_egg).
-
-> A salted duck egg is a Chinese preserved food product made by soaking duck
-> eggs in brine, or packing each egg in damp, salted charcoal. In Asian
-> supermarkets, these eggs are sometimes sold covered in a thick layer of salted
-> charcoal paste. The eggs may also be sold with the salted paste removed,
-> wrapped in plastic, and vacuum packed. From the salt curing process, the
-> salted duck eggs have a briny aroma, a gelatin-like egg white and a
-> firm-textured, round yolk that is bright orange-red in color.
+- 파일 호스팅, 서버사이드 렌더링이 필요 없는 앱개발 가능, 
+- 파이썬 다양한 유명 패키지를 브라우저에서 사용 가능 (Numpy, Pandas, Scikit-learn 등)
+- 파이썬과 자바스크립트 양방향 소통 가능
+- 무슨 패키지를 사용할지 무슨 파일을 포함할 지 페이지 안에서 결정할 수 있음
+- 비주얼 UI 컴포넌트를 파이썬으로 개발 가능
+- 유연한 프레임워크: 확장이 가능하고 어디서든 불러와 손쉽게 사용할 수 있는 컴포넌트
 
 ![Chinese Salty Egg](./salty_egg.jpg)
 
