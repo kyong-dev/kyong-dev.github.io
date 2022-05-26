@@ -2,7 +2,7 @@
 date: '2022-05-13'
 title: 'Clean Code'
 categories: ['Book Review', 'Clean Code']
-summary: ''
+summary: '클린코드 리마인드용 개인 요약'
 thumbnail: ./clean-code.jpeg
 publicURL: https://kyong-dev.github.io
 ---
