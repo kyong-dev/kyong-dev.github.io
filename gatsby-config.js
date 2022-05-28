@@ -1,7 +1,7 @@
 module.exports = {
   siteMetadata: {
     title: `Kyong's Devlog`,
-    description: `Kick off your next, great Gatsby project with this default starter. This barebones starter ships with the main Gatsby configuration files you might need.`,
+    description: `Yes, this is just a personal blog where there are some programming tips that might be useful to somebody oneday.`,
     author: `@kyong-dev`,
     siteUrl: `https://kyong-dev.github.io/`,
   },
