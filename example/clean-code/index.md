@@ -124,3 +124,7 @@ publicURL: https://kyong-dev.github.io
 * 자바 스프링 구조 공부
 
 (2022-06-03)
+
+## 12장. 창발성
+
+(2022-06-)
