@@ -6,6 +6,7 @@ summary: 'Mac에서 터미널로 VS Code 간편하게 실행시키기'
 thumbnail: ./vscode-image.png
 publicURL: https://kyong-dev.github.io
 ---
+# Mac에서 터미널로 VS Code 간편하게 실행시키기
 
 Mac으로 개발을 시작하기 전까진 개발 메인 OS로는 Ubuntu를 꽤나 오래 써왔다. 그리고 IDE는 다양하게 많이 사용 해봤지만 VS Code가 개인적으로 사용하기 편하다. 필자는 컴퓨터를 키고 항상 버릇처럼 터미널을 열고 내가 지금 개발하고자 하는 프로젝트 Path를 찾아가서 
 

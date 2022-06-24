@@ -6,6 +6,7 @@ summary: 'Python 쿠팡 API Package 401 Unauthorized 오류 처리'
 thumbnail: ./coupang-image.jpeg
 publicURL: https://kyong-dev.github.io
 ---
+# Python 쿠팡 API Package 401 Unauthorized 오류 처리
 
 Coupang은 <a href="https://developers.coupangcorp.com/hc/ko">Open API</a>를 제공하는 플랫폼 중 하나다.
 

@@ -7,6 +7,8 @@ thumbnail: ./thumbnail-image.png
 publicURL: https://kyong-dev.github.io
 ---
 
+# '제목'
+
 This is my first post on my new fake blog! How exciting!
 
 I'm sure I'll write a lot more interesting things in the future.

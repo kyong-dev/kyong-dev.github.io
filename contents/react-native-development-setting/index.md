@@ -6,6 +6,7 @@ summary: '리액트 네이티브 개발용 환경설정하기 (Intel MacOS)'
 thumbnail: ./react-native-image.png
 publicURL: https://kyong-dev.github.io
 ---
+# '리액트 네이티브 개발용 환경설정하기'
 
 오랜만에 앱개발 공부하려고 제로초님의 리액트 네이티브 강좌를 인프런에서 결제했다.
 React Native로 내 서비스 만들어 배포하고 싶은 마음에 시작한 앱공부.. 앱 서비스 회사가 아니여서 요 몇 년은 앱개발과 멀어졌었는데 천천히 다시 공부해보려고 한다.

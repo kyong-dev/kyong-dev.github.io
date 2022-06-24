@@ -6,6 +6,7 @@ summary: '개인통관고유부호 확인할 수 있는 관세청 OPEN API v3.0'
 thumbnail: ./customs-id-number.png
 publicURL: https://kyong-dev.github.io
 ---
+# 개인통관고유부호 확인할 수 있는 관세청 OPEN API v3.0
 
 회사에서 운영하는 직구 플랫폼이 있다보니 개인통관고유부호 확인에 들어가는 CS가 만만치 않다. 과거에 운영했던 의류직구 플랫폼엔 관세청 API를 이용해 실시간 검증을 도입했었다 (개인통관고유부호와 수취인 정보와 같아야 주문완료 되는 시스템). 
 
