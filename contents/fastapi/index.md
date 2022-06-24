@@ -17,9 +17,10 @@ FastAPI는 아직 1.0 버전이 정식 출시되지 않은 베타버전이지만
 
 <a href="https://www.techempower.com/benchmarks/#section=test&runid=7464e520-0dc2-473d-bd34-dbdfd7e85911&hw=ph&test=query&l=v2qiv3-db&a=2" rel="FastAPI 벤치마크 표">![FastAPI 벤치마크 표](./fastapi-performance-table.png)</a><br />
 
-도전해볼만한 가치가 있는 것 같았다. 아직 많이 보편화 되어 있진 않지만 공식문서가 아주 잘 정리되어 있기도 하고 생각보다 많은 곳에서 무료 동영상 튜토리얼도 찾아볼 수 있었다. 며칠 동안 자기전에 뚝딱뚝딱 <a href="https://www.youtube.com/c/Freecodecamp">freeCodeCamp.org</a> 유튜브 채널에 올라온 영상을 보며 따라 만들어 봤는데 사용하기 직관적이고 편한 것 같다.
+도전해볼만한 가치가 있는 것 같았다. 아직 많이 보편화 되어 있진 않지만 공식문서가 아주 잘 정리되어 있기도 하고 생각보다 많은 곳에서 무료 동영상 튜토리얼도 찾아볼 수 있었다. 며칠 동안 자기전에 뚝딱뚝딱 <a href="https://www.youtube.com/c/Freecodecamp">freeCodeCamp.org</a> 유튜브 채널에 올라온 영상을 보며 따라 만들어 봤는데 사용하기 직관적이고 편한 것 같다. 
 <br /><br />
 
+Documentation도 차근차근 다 읽어봤는데 나중에 잊을만하면 한번쯤 읽어볼 수 있게 Recap을 정리해야겠다.
 
 <a href="https://www.youtube.com/watch?v=Cy9fAvsXGZA" rel="FastAPI 튜토리얼">![FastAPI 튜토리얼](./fastapi-youtube.png)</a>
 <br />
