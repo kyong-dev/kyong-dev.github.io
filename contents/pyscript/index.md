@@ -22,7 +22,9 @@ publicURL: https://kyong-dev.github.io
 - 비주얼 UI 컴포넌트를 파이썬으로 개발 가능
 - 유연한 프레임워크: 확장이 가능하고 어디서든 불러와 손쉽게 사용할 수 있는 컴포넌트
 
-![Chinese Salty Egg](./salty_egg.jpg)
+https://realpython.com/pyscript-python-in-browser/
+
+![Pycript](./pyscript_img.webp)
 
 You can also write code blocks here!
 
