@@ -3,7 +3,7 @@ date: '2022-07-02'
 title: 'Javascript Tips'
 categories: ['Javascript']
 summary: '자바스크립트 자주 쓰는 유용한 코드들 모음'
-thumbnail: ./thumbnail-image.png
+thumbnail: ./javascript-thumbnail.jpeg
 publicURL: https://kyong-dev.github.io
 ---
 
@@ -12,5 +12,8 @@ publicURL: https://kyong-dev.github.io
 - Money display formatting
 
 ```javascript
-money.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+const money = 10000;
+const moneyDisplay = money.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+console.log(`${moneyDisplay}원`);
+> 10,000원
 ```
