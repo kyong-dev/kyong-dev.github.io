@@ -1,5 +1,5 @@
 {
     "componentChunkName": "component---src-pages-info-tsx",
     "path": "/info/",
-    "result": {"data":{"site":{"siteMetadata":{"title":"Gatsby Default Starter","description":"Kick off your next, great Gatsby project with this default starter. This barebones starter ships with the main Gatsby configuration files you might need.","author":"@kyong-dev"}}},"pageContext":{}},
+    "result": {"data":{"site":{"siteMetadata":{"title":"Kyong's Devlog","description":"Yes, this is just a personal blog where there are some programming tips that might be useful to somebody oneday.","author":"@kyong-dev"}}},"pageContext":{}},
     "staticQueryHashes": []}
