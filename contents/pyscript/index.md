@@ -1,5 +1,5 @@
 ---
-date: '2000-01-01'
+date: '2022-07-19'
 title: 'Now you are allowed to use Python in your browser'
 categories: ['Python', 'PyScript', 'Frontend']
 summary: '프론트에서 파이썬을??'

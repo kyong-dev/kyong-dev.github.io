@@ -1,5 +1,5 @@
 ---
-date: '2022-07-02'
+date: '2000-01-01'
 title: 'Javascript Tips'
 categories: ['Javascript']
 summary: '자바스크립트 자주 쓰는 유용한 코드들 모음'
