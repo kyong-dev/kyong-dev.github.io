@@ -1,5 +1,5 @@
 ---
-date: '2022-06-19'
+date: '2000-01-01'
 title: 'React Native Useful Libraries'
 categories: ['React Native', 'React Native Library', 'Typescript']
 summary: '리액트 네이티브 실사용에 필요한 라이브러리 모음.'
