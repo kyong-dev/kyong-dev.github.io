@@ -7,4 +7,4 @@ thumbnail: ./thumbnail-image.png
 publicURL: https://kyong-dev.github.io
 ---
 
-# '제목'
+# 생각하는 프로그래밍 개인 요약
