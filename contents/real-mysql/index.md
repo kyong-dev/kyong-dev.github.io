@@ -10,3 +10,6 @@ publicURL: https://kyong-dev.github.io
 
 # Real MySQL 개인 요약
 
+## 2장. 설치와 설정
+
+## 1장. 사용자 및 권한
