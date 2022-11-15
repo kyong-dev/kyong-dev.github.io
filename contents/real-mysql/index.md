@@ -12,4 +12,4 @@ publicURL: https://kyong-dev.github.io
 
 ## 2장. 설치와 설정
 
-## 1장. 사용자 및 권한
+## 3장. 사용자 및 권한
