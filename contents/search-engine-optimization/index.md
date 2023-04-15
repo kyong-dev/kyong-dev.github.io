@@ -19,7 +19,7 @@ publicURL: https://kyong-dev.github.io
 - [ ] 서브 폴더 방식을 사용하는가?
 
 
-### 접근성 및 색인 (accessibility & indextion)
+### 접근성 및 색인 (accessibility & indexation)
 웹 페이지가 검색봇에 발견되고 색인되기 위해 갖춰야 할 요소를 점검한다.
 
 - [ ] robots.txt 파일을 갖고 있는가?
@@ -28,7 +28,7 @@ publicURL: https://kyong-dev.github.io
 - [ ] sitemap.xml 주소가 robots.txt 파일에 리스트되었는가?
 - [ ] 404 에러 페이지가 있는가?
 - [ ] 모바일 친화적인 반응형 웹 페이지인가?
-- [ ] <a href=”https://amp.dev/”>AMP(Accelerated Mobile Pages)</a>를 사용하는가?
+- [ ] [AMP(Accelerated Mobile Pages)](https://amp.dev/)를 사용하는가?
 - [ ] 크롤링 예산은 적정한가?
 
 
