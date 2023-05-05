@@ -1,0 +1,5 @@
+{
+    "componentChunkName": "component---src-pages-info-tsx",
+    "path": "/info/",
+    "result": {"data":{"site":{"siteMetadata":{"title":"Kyong's Devlog","description":"Yes, this is just a personal blog where there are some programming tips that might be useful to somebody oneday.","author":"@kyong-dev"}}},"pageContext":{}},
+    "staticQueryHashes": []}
