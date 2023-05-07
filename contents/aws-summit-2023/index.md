@@ -75,10 +75,11 @@ standard-Infrequent Access
 - 1개의 Provisioned CU로 서비스
 
 Reserved Capacity 
-수집, 얘측, 비율산정
+수집, 예측, 비율산정
 
 Stabdard_IA
 
+S3 Standard-IA is for data that is accessed less frequently, but requires rapid access when needed. S3 Standard-IA offers the high durability, high throughput, and low latency of S3 Standard, with a low per GB storage price and per GB retrieval charge.
 
 ![하시코프가 제안하는 클라우드 배포 / 운영 / 보안강화 전략](./session3.png)
 
@@ -105,8 +106,32 @@ ISMS(Information Security Management System): 정보보호관리체계라고 하
 
 이 인증을 통과하기 위해 보안 시스템을 설계하는데 있어서 Vault 클라우드 서비스를 이용하면 정기적으로 DB 정보를 수정함에 있어 뒤따른 부수적인 업무들을 자동화 시킬 수 있다.
 
+![서버리스, 이제는 데이터 분석에서 활용해요!](./session4.png)
 
-![Amazon Neptune 및 Elastic을 이용한 추천 서비스 및 검색 플랫폼 구축하기](./session4.png)
+원래는 다른 강연을 듣고 싶었지만 AWS 지방 세일즈 팀분들과 간단하게 미팅을 하고 다시 강연장을 찾았을땐 듣고 싶었던 강연장이 다 차서 어쩔수 없이 다른 강연에 참석하게 되었는데 이 또한 좋은 정보를 들을 수 있었다.
+
+> 서버리스 분석 서비스
+
+### <a href="https://aws.amazon.com/redshift/redshift-serverless">Amazon Redshift</a>
+데이터 웨어하우스
+### <a href="https://aws.amazon.com/glue">Amazon Glue</a>
+데이터 통합, ETL 및 카탈로그
+### <a href="https://aws.amazon.com/emr/serverless">Amazon EMR</a>
+빅데이터 처리
+### <a href="https://aws.amazon.com/opensearch-service/features/serverless">Amazon OpenSearch</a>
+검색 및 로그 분석
+### <a href="https://aws.amazon.com/msk/features/msk-serverless">Amazon MSK</a>
+실시간 분석
+### <a href="https://aws.amazon.com/kinesis">Amazon Kinesis</a>
+실시간 분석
+### <a href="https://aws.amazon.com/quicksight">Amazon QuickSight</a>
+시각화
+### <a href="https://aws.amazon.com/athena">Amazon Athena</a>
+대화형 분석
+
+그 외 자세한 내용은 아래 블로그 링크를 통해서 확인 가능하다
+
+<a href="https://aws.amazon.com/ko/blogs/korea/">Amazon Web Services 한국 블로그</a>
 
 ![글로벌 대화형 서비스 개발 플랫폼 Sendbird가 AWS와 함께한 빌드 여정](./session5.png)
 
@@ -116,3 +141,18 @@ AWS Graviton processors are designed by AWS to deliver the best price performanc
 
 ![실시간 CDC 데이터 처리! Modern Transactional Data Lake 구축하기](./session6.png)
 
+
+
+
+Conclusion
+
+정말 좋은 기회로 참석하게 되었고 좋은 동기부여를 받을 수 있었다. AWS 기능들이 많은 건 알고 있었지만 하나의 큰 프로세스를 구축하기 위해 하나하나의 서비스들이 론칭 되었고 개발되어 왔다는게 AWS에 대단함을 또 한번 느끼게 되었다. 개인적으로
+지방지역에 투자를 기획하고 있는 AWS Korea에 감사함을 느끼며 지방에서 서비스 도입에 관심이 있다면 아래 연락처로 연락하면 됩니다.
+
+한탁경 Takkyong Han <br />
++82 10 5607 6774 <br />
+부산 Territory Manager
+
+김강현 Kanghyun Kim <br />
++82 10 4178 0967 <br />
+Demand Generation Representative / Cloud Sales Center
