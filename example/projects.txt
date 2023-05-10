@@ -1,5 +1,5 @@
 랭킹딜
-- PHP, OpenCV, EasyOCR, Google OCR, Javascript, html, css, MySQL, 고도몰
+- PHP, OpenCV, EasyOCR, Google OCR, Front End, MySQL, 고도몰
 - 고도몰 튜닝 (좋아요 기능, 추천인 링크 마일리지 적립 시스템 추가, 주문 시 실시간 개인통관부호 확인)
 - VVIC 중국 대형 의류 쇼핑몰 실시간 크롤링 -> 자사몰에 상품 등록 / 수정 (대량 Database)
 - 실시간 상품 재고 및 가격 변동 확인 후 고도몰 DB에 반영
@@ -15,7 +15,6 @@
     기존 Translator는 한국 의류 트랜드에 맞지 않게 번역 하는 문제가 발생해 자체 제작한 번역기를 이용해 상품 이름 / 정보 등을 번역함.
 
 
-
 8개월
 OpenCV를 활용한 대량 사진 중복 필터링
 - Docker, OpenCV, Python, Ubuntu 20.04 LTS
@@ -24,7 +23,6 @@ OpenCV를 활용한 대량 사진 중복 필터링
 코인투자용 Chrome Extension 개발
 - 계열사 요청으로 제작
 - React, Javascript, Python, Upbit API
-
 
 자사 내부사용 프로그램
 1. 해외직구 플랫폼 사무 자동화
@@ -40,16 +38,30 @@ OpenCV를 활용한 대량 사진 중복 필터링
 - Appium, Selenium, Python
 
 4. 수입금지 성분 필터
-- 
+- 해외 건강기능식품 성분리스트 중 수입금지 성분이 포함 되어있는지 확인하는 윈도우 구동 프로그램
+- 이미지 OCR을 이용해 성분분석표에 있는 내용을 추출해 성분 데이터베이스에 포함되는 성분이 있는지를 체크해 사용자에게 알려주는 프로그램
 
 5. 캠핑 브랜드 실시간 주문관리 통합 시스템 + 정산 및 통계 시각화
-- 
+- 사무실 <-> 공장과 실시간으로 주문처리(CS상태 공유)를 위해 시스템 구축
+- 재고 관리, 고객 알림톡 전송, 배송처리, 주문 정산 보고서 자동화
 
 
-리얼셀링
+자사쇼핑몰 기획 및 리뉴얼
+https://www.nuti.kr
+
+자사쇼핑몰 기획 및 제작
+https://www.selectfitmall.com
+https://www.monsterpro.co.kr
+https://www.realselling.co.kr
 
 리뷰릿지
+React, Typescript, FastAPI
+자사몰에 부족한 리뷰 정보를 보다 편리한 UI로 소비자에게 제공하기 위한 서비스
 
 웰비코
+- 해외법인 사업자가 입점을 해 한국에 판매를 할 수 있는 미니 오픈마켓 플랫폼
+- 미국달러 기준으로 가격을 책정할 수 있는 옵션 제공 (정해진 시간에 환율에 맞춰 상품의 가격을 자동으로 변경)
+- 
+
 
 회사 브랜드 사이트
