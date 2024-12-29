@@ -4,9 +4,10 @@ const preferDefault = m => (m && m.default) || m
 
 
 exports.components = {
-  "component---src-pages-404-tsx": preferDefault(require("/Users/grae/Projects/kyong-dev.github.io/src/pages/404.tsx")),
-  "component---src-pages-index-tsx": preferDefault(require("/Users/grae/Projects/kyong-dev.github.io/src/pages/index.tsx")),
-  "component---src-pages-info-tsx": preferDefault(require("/Users/grae/Projects/kyong-dev.github.io/src/pages/info.tsx")),
-  "component---src-templates-post-template-tsx": preferDefault(require("/Users/grae/Projects/kyong-dev.github.io/src/templates/post_template.tsx"))
+  "component---cache-dev-404-page-js": preferDefault(require("/Users/kyong/dev/devlog/.cache/dev-404-page.js")),
+  "component---src-pages-404-tsx": preferDefault(require("/Users/kyong/dev/devlog/src/pages/404.tsx")),
+  "component---src-pages-index-tsx": preferDefault(require("/Users/kyong/dev/devlog/src/pages/index.tsx")),
+  "component---src-pages-info-tsx": preferDefault(require("/Users/kyong/dev/devlog/src/pages/info.tsx")),
+  "component---src-templates-post-template-tsx": preferDefault(require("/Users/kyong/dev/devlog/src/templates/post_template.tsx"))
 }
 

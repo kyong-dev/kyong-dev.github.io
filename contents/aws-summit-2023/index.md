@@ -2,7 +2,7 @@
 date: '2023-05-04'
 title: 'AWS Summit Seoul 2023 다녀오다'
 categories: ['AWS Summit', 'Conference']
-summary: ''
+summary: '열정이 넘치는 컨퍼런스'
 thumbnail: ./awssummit-thumb.png
 publicURL: https://kyong-dev.github.io
 ---

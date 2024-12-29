@@ -7,27 +7,27 @@
           "options": {}
         },
         {
-          "name": "/Users/grae/Projects/kyong-dev.github.io/node_modules/@babel/plugin-proposal-optional-chaining/lib/index.js",
+          "name": "/Users/kyong/dev/devlog/node_modules/@babel/plugin-proposal-optional-chaining/lib/index.js",
           "options": {}
         },
         {
-          "name": "/Users/grae/Projects/kyong-dev.github.io/node_modules/@babel/plugin-proposal-nullish-coalescing-operator/lib/index.js",
+          "name": "/Users/kyong/dev/devlog/node_modules/@babel/plugin-proposal-nullish-coalescing-operator/lib/index.js",
           "options": {}
         },
         {
-          "name": "/Users/grae/Projects/kyong-dev.github.io/node_modules/@babel/plugin-proposal-numeric-separator/lib/index.js",
+          "name": "/Users/kyong/dev/devlog/node_modules/@babel/plugin-proposal-numeric-separator/lib/index.js",
           "options": {}
         },
         {
-          "name": "/Users/grae/Projects/kyong-dev.github.io/node_modules/gatsby-plugin-image/dist/babel-plugin-parse-static-images.js",
+          "name": "/Users/kyong/dev/devlog/node_modules/gatsby-plugin-image/dist/babel-plugin-parse-static-images.js",
           "options": {
-            "cacheDir": "/Users/grae/Projects/kyong-dev.github.io/.cache/caches/gatsby-plugin-image"
+            "cacheDir": "/Users/kyong/dev/devlog/.cache/caches/gatsby-plugin-image"
           }
         }
       ],
       "presets": [
         {
-          "name": "/Users/grae/Projects/kyong-dev.github.io/node_modules/@babel/preset-typescript/lib/index.js",
+          "name": "/Users/kyong/dev/devlog/node_modules/@babel/preset-typescript/lib/index.js",
           "options": {
             "plugins": [],
             "isTSX": true,
@@ -36,7 +36,7 @@
           }
         },
         {
-          "name": "/Users/grae/Projects/kyong-dev.github.io/node_modules/@emotion/babel-preset-css-prop/dist/emotion-babel-preset-css-prop.cjs.js",
+          "name": "/Users/kyong/dev/devlog/node_modules/@emotion/babel-preset-css-prop/dist/emotion-babel-preset-css-prop.cjs.js",
           "options": {
             "sourceMap": true,
             "autoLabel": "dev-only",
@@ -58,27 +58,27 @@
           "options": {}
         },
         {
-          "name": "/Users/grae/Projects/kyong-dev.github.io/node_modules/@babel/plugin-proposal-optional-chaining/lib/index.js",
+          "name": "/Users/kyong/dev/devlog/node_modules/@babel/plugin-proposal-optional-chaining/lib/index.js",
           "options": {}
         },
         {
-          "name": "/Users/grae/Projects/kyong-dev.github.io/node_modules/@babel/plugin-proposal-nullish-coalescing-operator/lib/index.js",
+          "name": "/Users/kyong/dev/devlog/node_modules/@babel/plugin-proposal-nullish-coalescing-operator/lib/index.js",
           "options": {}
         },
         {
-          "name": "/Users/grae/Projects/kyong-dev.github.io/node_modules/@babel/plugin-proposal-numeric-separator/lib/index.js",
+          "name": "/Users/kyong/dev/devlog/node_modules/@babel/plugin-proposal-numeric-separator/lib/index.js",
           "options": {}
         },
         {
-          "name": "/Users/grae/Projects/kyong-dev.github.io/node_modules/gatsby-plugin-image/dist/babel-plugin-parse-static-images.js",
+          "name": "/Users/kyong/dev/devlog/node_modules/gatsby-plugin-image/dist/babel-plugin-parse-static-images.js",
           "options": {
-            "cacheDir": "/Users/grae/Projects/kyong-dev.github.io/.cache/caches/gatsby-plugin-image"
+            "cacheDir": "/Users/kyong/dev/devlog/.cache/caches/gatsby-plugin-image"
           }
         }
       ],
       "presets": [
         {
-          "name": "/Users/grae/Projects/kyong-dev.github.io/node_modules/@babel/preset-typescript/lib/index.js",
+          "name": "/Users/kyong/dev/devlog/node_modules/@babel/preset-typescript/lib/index.js",
           "options": {
             "plugins": [],
             "isTSX": true,
@@ -87,7 +87,7 @@
           }
         },
         {
-          "name": "/Users/grae/Projects/kyong-dev.github.io/node_modules/@emotion/babel-preset-css-prop/dist/emotion-babel-preset-css-prop.cjs.js",
+          "name": "/Users/kyong/dev/devlog/node_modules/@emotion/babel-preset-css-prop/dist/emotion-babel-preset-css-prop.cjs.js",
           "options": {
             "sourceMap": true,
             "autoLabel": "dev-only",
@@ -109,27 +109,27 @@
           "options": {}
         },
         {
-          "name": "/Users/grae/Projects/kyong-dev.github.io/node_modules/@babel/plugin-proposal-optional-chaining/lib/index.js",
+          "name": "/Users/kyong/dev/devlog/node_modules/@babel/plugin-proposal-optional-chaining/lib/index.js",
           "options": {}
         },
         {
-          "name": "/Users/grae/Projects/kyong-dev.github.io/node_modules/@babel/plugin-proposal-nullish-coalescing-operator/lib/index.js",
+          "name": "/Users/kyong/dev/devlog/node_modules/@babel/plugin-proposal-nullish-coalescing-operator/lib/index.js",
           "options": {}
         },
         {
-          "name": "/Users/grae/Projects/kyong-dev.github.io/node_modules/@babel/plugin-proposal-numeric-separator/lib/index.js",
+          "name": "/Users/kyong/dev/devlog/node_modules/@babel/plugin-proposal-numeric-separator/lib/index.js",
           "options": {}
         },
         {
-          "name": "/Users/grae/Projects/kyong-dev.github.io/node_modules/gatsby-plugin-image/dist/babel-plugin-parse-static-images.js",
+          "name": "/Users/kyong/dev/devlog/node_modules/gatsby-plugin-image/dist/babel-plugin-parse-static-images.js",
           "options": {
-            "cacheDir": "/Users/grae/Projects/kyong-dev.github.io/.cache/caches/gatsby-plugin-image"
+            "cacheDir": "/Users/kyong/dev/devlog/.cache/caches/gatsby-plugin-image"
           }
         }
       ],
       "presets": [
         {
-          "name": "/Users/grae/Projects/kyong-dev.github.io/node_modules/@babel/preset-typescript/lib/index.js",
+          "name": "/Users/kyong/dev/devlog/node_modules/@babel/preset-typescript/lib/index.js",
           "options": {
             "plugins": [],
             "isTSX": true,
@@ -138,7 +138,7 @@
           }
         },
         {
-          "name": "/Users/grae/Projects/kyong-dev.github.io/node_modules/@emotion/babel-preset-css-prop/dist/emotion-babel-preset-css-prop.cjs.js",
+          "name": "/Users/kyong/dev/devlog/node_modules/@emotion/babel-preset-css-prop/dist/emotion-babel-preset-css-prop.cjs.js",
           "options": {
             "sourceMap": true,
             "autoLabel": "dev-only",
@@ -160,27 +160,27 @@
           "options": {}
         },
         {
-          "name": "/Users/grae/Projects/kyong-dev.github.io/node_modules/@babel/plugin-proposal-optional-chaining/lib/index.js",
+          "name": "/Users/kyong/dev/devlog/node_modules/@babel/plugin-proposal-optional-chaining/lib/index.js",
           "options": {}
         },
         {
-          "name": "/Users/grae/Projects/kyong-dev.github.io/node_modules/@babel/plugin-proposal-nullish-coalescing-operator/lib/index.js",
+          "name": "/Users/kyong/dev/devlog/node_modules/@babel/plugin-proposal-nullish-coalescing-operator/lib/index.js",
           "options": {}
         },
         {
-          "name": "/Users/grae/Projects/kyong-dev.github.io/node_modules/@babel/plugin-proposal-numeric-separator/lib/index.js",
+          "name": "/Users/kyong/dev/devlog/node_modules/@babel/plugin-proposal-numeric-separator/lib/index.js",
           "options": {}
         },
         {
-          "name": "/Users/grae/Projects/kyong-dev.github.io/node_modules/gatsby-plugin-image/dist/babel-plugin-parse-static-images.js",
+          "name": "/Users/kyong/dev/devlog/node_modules/gatsby-plugin-image/dist/babel-plugin-parse-static-images.js",
           "options": {
-            "cacheDir": "/Users/grae/Projects/kyong-dev.github.io/.cache/caches/gatsby-plugin-image"
+            "cacheDir": "/Users/kyong/dev/devlog/.cache/caches/gatsby-plugin-image"
           }
         }
       ],
       "presets": [
         {
-          "name": "/Users/grae/Projects/kyong-dev.github.io/node_modules/@babel/preset-typescript/lib/index.js",
+          "name": "/Users/kyong/dev/devlog/node_modules/@babel/preset-typescript/lib/index.js",
           "options": {
             "plugins": [],
             "isTSX": true,
@@ -189,7 +189,7 @@
           }
         },
         {
-          "name": "/Users/grae/Projects/kyong-dev.github.io/node_modules/@emotion/babel-preset-css-prop/dist/emotion-babel-preset-css-prop.cjs.js",
+          "name": "/Users/kyong/dev/devlog/node_modules/@emotion/babel-preset-css-prop/dist/emotion-babel-preset-css-prop.cjs.js",
           "options": {
             "sourceMap": true,
             "autoLabel": "dev-only",
