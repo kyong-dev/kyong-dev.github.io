@@ -1,0 +1,39 @@
+---
+date: '2025-02-28'
+title: '아마존의 성공 원칙 Working Backwards'
+categories: ['Web', 'SEO', 'Optimization']
+summary: '고객의 관점에서 부터 거꾸로 일하는 원칙을 모든 부서에서 적용하며 서비스를 개발하는 원칙'
+thumbnail: ./working-backards-thumb.png
+publicURL: https://kyong-dev.github.io
+---
+
+# ''
+
+- 도어 데스크 어워드 (The Door Desk Award) - 아마존 창업 초기의 절약 마인드를 상기하자는 취지로 만들어진 비용 절감에 탁월한 효과를 발휘한 아이디어에 수여하는 상.
+
+- 저스트 두 잇 어워드 (The Just Do It Award) - 자신의 직무과 전혀 연관이 없는 영역에서 뛰어난 아이디어를 제시한 직원에게 수여하는 상.
+
+## S팀의 목표
+
+1. 구체적이면서 (Specific)
+2. 측정가능하고 (Measureable)
+3. 달성할 수 있으며 (Attainable)
+4. 의미가 있고 (Relevant)
+5. 시기가 분명해야 한다 (Timely)
+
+## 바 레이저 프로세스
+
+1. 직무기술서 작성
+2. 이력서 검토
+3. 전화 인터뷰
+4. 대면 인터뷰
+### 행동사건 인터뷰
+#### 진실을 파고들기 위한 질문
+- 어떤 상황(Situation)이었습니까?
+- 어떤 과제(Task)를 맡았습니까?
+- 어떤 행동(Action)을 취했습니까?
+- 결과(Result)는 어땠습니까?
+5. 피드백 작성
+6. 인터뷰 결과 보고와 채용 회의
+7. 추천 조사
+8. 채용 결정 통보

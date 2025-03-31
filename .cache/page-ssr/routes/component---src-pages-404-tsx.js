@@ -257,8 +257,8 @@ function _EMOTION_STRINGIFIED_CSS_ERROR__() { return "You have tried to stringif
 
 
 const defaultStyle =  true ? {
-  name: "kxm5mf",
-  styles: "@import url('https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&display=swap');{}*{padding:0;margin:0;box-sizing:border-box;font-family:'Nanum Myeongjo',serif;}html,body,#___gatsby{height:100%;}a,a:hover{color:inherit;text-decoration:none;cursor:pointer;}"
+  name: "1kcpf6a",
+  styles: "@import url('https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&display=swap');{}*{padding:0;margin:0;box-sizing:border-box;}html,body,#___gatsby{height:100%;}a,a:hover{color:inherit;text-decoration:none;cursor:pointer;}"
 } : 0;
 
 const GlobalStyle = function () {
