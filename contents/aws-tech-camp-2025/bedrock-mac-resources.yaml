@@ -1,0 +1,3347 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation Template for 2025 Q3 TechCamp'
+
+# Parameters:
+#   AllowedRegion:
+#     Type: String
+#     Default: us-west-2
+
+# Conditions:
+#   IsCorrectRegion: !Equals [!Ref "AWS::Region", !Ref AllowedRegion]
+
+Resources:
+  # [선행 조건] 워크샵 참여자가 "bedrock-mac-cloudformation-${AWS::AccountId}" 라는 S3 Bucket 생성 후, 해당 .yaml 파일과 python.zip(람다 레이어)을 S3 Bucket에 업로드
+  LambdaLayerForAll:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      LayerName: common-lambda-layer
+      Description: A shared Lambda layer containing multiple Python libraries used by functions for Amazon Bedrock Multi-Agent Collaboration.
+      Content:
+        S3Bucket: !Sub "cloudformation-staging-bucket-${AWS::AccountId}"
+        S3Key: python.zip
+      CompatibleRuntimes:
+        - python3.10
+        - python3.11
+      CompatibleArchitectures:
+        - x86_64
+      LicenseInfo: MIT 
+
+
+  # 모든 Lambda function이 공통적으로 사용하는 execution Role
+  LambdaRoleActions:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: bedrock-multi-agent-lambda-role
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/SecretsManagerReadWrite
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:  
+        - Effect: Allow
+          Principal:  
+            Service: 
+             - lambda.amazonaws.com
+          Action: 
+           - sts:AssumeRole
+
+  # Lambda function - agent_web_search
+  LambdaFunctionAgentWebSearch:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.10
+      Handler: index.lambda_handler
+      Architectures:
+        - x86_64
+      FunctionName: agent_web_search
+      Role: !GetAtt LambdaRoleActions.Arn
+      Timeout: 600
+      MemorySize: 512
+      EphemeralStorage:
+        Size: 512
+      Code:
+        ZipFile: |
+          import http.client
+          import json
+          import logging
+          import os
+          import urllib.parse
+          import urllib.request
+          import boto3
+
+          session = boto3.session.Session()
+          secrets_manager = session.client(service_name="secretsmanager")
+          SECRET_KEY_NAME = "TAVILY_API_KEY"
+          FUNCTION_NAMES = []
+
+          log_level = "INFO"
+          logging.basicConfig(
+              format="[%(asctime)s] p%(process)s {%(filename)s:%(lineno)d} %(levelname)s - %(message)s"
+          )
+          logger = logging.getLogger(__name__)
+          logger.setLevel(log_level)
+
+          def get_from_secretstore(SecretId: str) -> str:
+              try:
+                  secret_value = secrets_manager.get_secret_value(SecretId=SecretId)
+              except Exception as e:
+                  logger.error(f"could not get secret {SecretId} from secrets manager: {e}")
+                  raise e
+              SecretString: str = secret_value["SecretString"]
+              try:
+                  secret_json = json.loads(SecretString) # JSON 형태로 들어오는 경우 파싱하여 TAVILY_API_KEY 값만 추출
+                  if isinstance(secret_json, dict) and "TAVILY_API_KEY" in secret_json:
+                      return secret_json["TAVILY_API_KEY"]
+              except json.JSONDecodeError:
+                  pass # JSON이 아닌 경우 원래 값 사용
+              return SecretString
+
+          try:
+              TAVILY_API_KEY = get_from_secretstore(SecretId=SECRET_KEY_NAME)
+              FUNCTION_NAMES.append("web_search")
+              FUNCTION_NAMES.append("multi_search")  # 새로운 함수 추가
+          except Exception as e:
+              TAVILY_API_KEY = None
+
+          def web_search(
+              search_query: str, target_website: str = "", topic: str = None, days: int = None, include_images: bool = True
+          ) -> str:
+              logger.info(f"executing Tavily AI search with {search_query=}")
+              base_url = "https://api.tavily.com/search"
+              headers = {
+                  "Content-Type": "application/json",
+                  "Accept": "application/json",
+                  "Authorization": f"Bearer {TAVILY_API_KEY}"
+              }
+              payload = {
+                  "query": search_query,
+                  "search_depth": "advanced",
+                  "include_images": True,  # 이미지 포함 옵션 변경
+                  "include_answer": False,
+                  "include_raw_content": False,
+                  "max_results": 3
+              }
+              # 선택적 매개변수
+              if topic is not None:
+                  payload["topic"] = topic
+              if days is not None:
+                  payload["days"] = days
+              if target_website:
+                  payload["include_domains"] = [target_website]
+
+              data = json.dumps(payload).encode("utf-8")
+              request = urllib.request.Request(base_url, data=data, headers=headers)
+
+              try:
+                  response = urllib.request.urlopen(request)
+                  response_data: str = response.read().decode("utf-8")
+                  logger.debug(f"response from Tavily AI search {response_data=}")
+                  return response_data
+              except urllib.error.HTTPError as e:
+                  error_body = e.read().decode("utf-8")
+                  error_message = f"failed to retrieve search results from Tavily AI Search, error: {e.code}"
+                  logger.error(f"{error_message}, details: {error_body}")
+                  return json.dumps({"error": error_message, "details": error_body}, ensure_ascii=False)
+              return ""
+
+          # 여러 쿼리를 처리하는 새로운 함수 추가
+          def multi_search(
+              search_queries: list, target_website: str = "", topic: str = None, days: int = None
+          ) -> str:
+              logger.info(f"executing multiple Tavily AI searches with {search_queries=}")
+
+              all_results = []
+
+              for query in search_queries:
+                  # 각 쿼리에 대해 web_search 함수 호출
+                  search_result = web_search(query, target_website, topic, days, include_images=True)
+
+                  try:
+                      # 결과를 JSON으로 파싱
+                      result_json = json.loads(search_result)
+
+                      # 쿼리 정보 추가
+                      result_json["query"] = query
+
+                      all_results.append(result_json)
+                  except json.JSONDecodeError:
+                      logger.error(f"Failed to parse search result for query: {query}")
+                      all_results.append({
+                          "query": query,
+                          "error": "Failed to parse search result",
+                          "raw_result": search_result
+                      })
+
+              # 모든 결과를 하나의 JSON으로 통합
+              combined_results = {
+                  "multi_search_results": all_results
+              }
+
+              return json.dumps(combined_results, ensure_ascii=False)
+
+          def lambda_handler(event, context):
+              logging.debug(f"{event=}")
+              agent = event["agent"]
+              actionGroup = event["actionGroup"]
+              function = event["function"]
+              parameters = event.get("parameters", [])
+              responseBody = {"TEXT": {"body": "Error, no function was called"}}
+              logger.info(f"{actionGroup=}, {function=}")
+
+              if function in FUNCTION_NAMES:
+                  if function == "web_search":
+                      search_query = None
+                      target_website = None
+                      topic = None
+                      days = None
+
+                      for param in parameters:
+                          if param["name"] == "search_query":
+                              search_query = param["value"]
+                          if param["name"] == "target_website":
+                              target_website = param["value"]
+                          if param["name"] == "topic":
+                              topic = param["value"]
+                          if param["name"] == "days":
+                              days = param["value"]
+                      if not search_query:
+                          responseBody = {
+                              "TEXT": {"body": "Missing mandatory parameter: search_query"}
+                          }
+                      else:
+                          search_results = web_search(search_query, target_website, topic, days)
+                          responseBody = {
+                              "TEXT": {
+                                  "body": f"Here are the top search results for the query '{search_query}': {search_results} "
+                              }
+                          }
+                          logger.debug(f"query results {search_results=}")
+
+                  elif function == "multi_search":
+                      search_queries = None
+                      target_website = None
+                      topic = None
+                      days = None
+                      for param in parameters:
+                          if param["name"] == "search_queries":
+                              # 문자열로 전달된 경우 처리
+                              if isinstance(param["value"], str):
+                                  try:
+                                      # 문자열을 리스트로 변환 시도
+                                      import ast
+                                      search_queries = ast.literal_eval(param["value"])
+                                  except:
+                                      # 쉼표로 구분된 문자열로 가정하고 분할
+                                      search_queries = [q.strip() for q in param["value"].strip('[]').split(',')]
+                              else:
+                                  search_queries = param["value"]
+                          if param["name"] == "target_website":
+                              target_website = param["value"]
+                          if param["name"] == "topic":
+                              topic = param["value"]
+                          if param["name"] == "days":
+                              days = param["value"]
+
+                      if not search_queries or not isinstance(search_queries, list):
+                          responseBody = {
+                              "TEXT": {"body": "Missing or invalid mandatory parameter: search_queries (must be a list)"}
+                          }
+                      else:
+                          search_results = multi_search(search_queries, target_website, topic, days)
+                          responseBody = {
+                              "TEXT": {
+                                  "body": f"Here are the results for multiple search queries: {search_results} "
+                              }
+                          }
+                          logger.debug(f"multi query results {search_results=}")
+              else:
+                  responseBody = {"TEXT": {"body": f"Unable to get {SECRET_KEY_NAME} Secret Key"}}
+
+              action_response = {
+                  "actionGroup": actionGroup,
+                  "function": function,
+                  "functionResponse": {"responseBody": responseBody}
+              }
+              function_response = {
+                  "response": action_response,
+                  "messageVersion": event["messageVersion"],
+              }
+              logger.debug(f"lambda_handler: {function_response=}")
+
+              return function_response
+    
+  LambdaAgentWebSearchPermissionForBedrockAgentAlias:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt LambdaFunctionAgentWebSearch.Arn
+      Principal: bedrock.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:agent-alias/*
+
+  LambdaAgentWebSearchPermissionForBedrockAgent:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt LambdaFunctionAgentWebSearch.Arn
+      Principal: bedrock.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:agent/*
+  
+  # Lambda function - put_s3_data
+  LambdaFunctionPutS3Data:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Architectures:
+        - x86_64
+      Layers: 
+        - !Ref LambdaLayerForAll
+      FunctionName: put_s3_data
+      Role: !GetAtt LambdaRoleActions.Arn
+      Timeout: 600
+      MemorySize: 512
+      EphemeralStorage:
+        Size: 512
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import base64
+          import os
+          import re
+          import traceback
+          import datetime
+          import uuid
+          import requests
+          from io import BytesIO
+          from botocore.exceptions import ClientError
+
+          def lambda_handler(event, context):
+              """
+              Lambda 함수: S3 관련 작업을 처리하는 핸들러
+              
+              Parameters:
+              - event: Lambda 이벤트 객체
+              - context: Lambda 컨텍스트 객체
+              
+              Returns:
+              - S3 작업 결과를 포함하는 JSON 응답
+              """
+              print("lambda_handler 함수 시작")
+              print(f"이벤트: {json.dumps(event)}")
+              
+              try:
+                  action_group = event.get('actionGroup', '')
+                  message_version = event.get('messageVersion', '')
+                  function = event.get('function', '')
+                  
+                  print(f"액션 그룹: {action_group}, 메시지 버전: {message_version}, 함수: {function}")
+                  
+                  # 함수 매핑
+                  function_mapping = {
+                      'write_analysis_to_s3': write_analysis_to_s3_handler,
+                      'read_analysis_from_s3': read_analysis_from_s3_handler,
+                      'list_analysis_files': list_analysis_files_handler,
+                      'delete_analysis_file': delete_analysis_file_handler,
+                      'process_tavily_images': process_tavily_images_handler
+                  }
+                  
+                  if function in function_mapping:
+                      # 해당 함수 핸들러 호출
+                      output = function_mapping[function](event)
+                  else:
+                      print(f"지원되지 않는 함수: {function}")
+                      output = {
+                          'error': f"지원되지 않는 함수: {function}"
+                      }
+                  
+                  # Bedrock Agent 응답 형식으로 변환
+                  action_response = {
+                      'actionGroup': action_group,
+                      'function': function,
+                      'functionResponse': {
+                          'responseBody': {'TEXT': {'body': json.dumps(output, ensure_ascii=False)}}
+                      }
+                  }
+                  
+                  function_response = {'response': action_response, 'messageVersion': message_version}
+                  print(f"응답 생성 완료: {json.dumps(function_response, ensure_ascii=False)[:200]}...")
+                  return function_response
+              
+              except Exception as e:
+                  print(f"lambda_handler 함수 처리 중 오류 발생: {str(e)}")
+                  traceback.print_exc()
+                  
+                  # 오류 발생 시에도 Bedrock Agent 응답 형식으로 반환
+                  error_response = {
+                      'response': {
+                          'actionGroup': event.get('actionGroup', ''),
+                          'function': event.get('function', ''),
+                          'functionResponse': {
+                              'responseBody': {'TEXT': {'body': json.dumps({'error': f"처리 중 오류가 발생했습니다: {str(e)}"}, ensure_ascii=False)}}
+                          }
+                      },
+                      'messageVersion': event.get('messageVersion', '')
+                  }
+                  return error_response
+
+          def get_named_parameter(event, name):
+              """
+              이벤트에서 특정 이름의 파라미터 값을 추출합니다.
+              
+              Parameters:
+              - event: Lambda 이벤트 객체
+              - name: 파라미터 이름
+              
+              Returns:
+              - 파라미터 값 또는 None (파라미터가 없는 경우)
+              """
+              print(f"파라미터 추출 시도: {name}, 이벤트 파라미터: {event.get('parameters', [])}")
+              for param in event.get('parameters', []):
+                  if param['name'] == name:
+                      print(f"파라미터 {name} 값: {param['value']}")
+                      return param['value']
+              print(f"파라미터 {name}을(를) 찾을 수 없음")
+              return None
+
+          def write_analysis_to_s3_handler(event):
+              """
+              write_analysis_to_s3 함수의 핸들러
+              
+              Parameters:
+              - event: Lambda 이벤트 객체
+              
+              Returns:
+              - S3 저장 결과를 포함하는 응답
+              """
+              # 파라미터 추출
+              s3_uri = get_named_parameter(event, "s3_uri")
+              agent_name = get_named_parameter(event, "agent_name")
+              description = get_named_parameter(event, "description")
+              references_json = get_named_parameter(event, "references_json") or "[]"
+              artifacts_json = get_named_parameter(event, "artifacts_json") or "[]"
+              
+              # 함수 호출
+              return write_analysis_to_s3(
+                  s3_uri, 
+                  agent_name, 
+                  description,
+                  references_json,
+                  artifacts_json
+              )
+
+          def write_analysis_to_s3(s3_uri, agent_name, description, references_json="[]", artifacts_json="[]"):
+              """
+              분석 결과를 S3에 저장하는 함수 (파라미터 간소화)
+              
+              Parameters:
+              - s3_uri: S3 URI (형식: s3://bucket-name/prefix)
+              - agent_name: 에이전트 이름
+              - description: 분석 결과 설명 (첫 줄은 분석 단계 제목으로 사용됨)
+              - references_json: 참조 출처 목록 (JSON 문자열 형식)
+              - artifacts_json: 생성된 파일 목록 (JSON 문자열 형식)
+              
+              Returns:
+              - 저장 결과를 포함하는 응답
+              """
+              try:
+                  if not s3_uri:
+                      return {'error': 'S3 URI가 제공되지 않았습니다.'}
+                  
+                  if not agent_name:
+                      return {'error': '에이전트 이름이 제공되지 않았습니다.'}
+                  
+                  if not description:
+                      return {'error': '분석 결과 설명이 제공되지 않았습니다.'}
+                  
+                  # S3 URI 파싱
+                  if s3_uri.startswith('s3://'):
+                      s3_uri = s3_uri[5:]  # 's3://' 제거
+                  
+                  parts = s3_uri.split('/', 1)
+                  bucket_name = parts[0]
+                  prefix = parts[1] if len(parts) > 1 else ''
+                  
+                  # S3 클라이언트 생성
+                  s3_client = boto3.client('s3')
+                  
+                  # 현재 시간
+                  current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                  
+                  # 고유 파일 이름 생성
+                  file_id = str(uuid.uuid4())[:8]
+                  file_name = f"{agent_name}_{file_id}.txt"
+                  
+                  # 아티팩트 파싱
+                  try:
+                      artifacts = json.loads(artifacts_json)
+                  except:
+                      artifacts = []
+                      
+                  # 참조 출처 파싱
+                  try:
+                      references = json.loads(references_json)
+                  except:
+                      references = []
+                  
+                  # description에서 첫 줄을 분석 단계 제목으로 사용
+                  description_lines = description.strip().split('\n', 1)
+                  stage = description_lines[0].strip()
+                  detailed_description = description_lines[1].strip() if len(description_lines) > 1 else description
+                  
+                  # 분석 결과 형식 생성
+                  content = "==================================================\n"
+                  content += f"## Analysis Stage: {stage}\n"
+                  content += f"## Execution Time: {current_time}\n"
+                  content += "--------------------------------------------------\n"
+                  content += "Result Description: \n\n"
+                  content += f"{detailed_description}\n\n"
+                  
+                  # 참조 출처 추가
+                  if references and len(references) > 0:
+                      content += "--------------------------------------------------\n"
+                      content += "References:\n"
+                      for i, ref in enumerate(references):
+                          title = ref.get('title', 'No title')
+                          url = ref.get('url', '')
+                          query = ref.get('query', '')
+                          content += f"{i+1}. [{title}]({url}) - Query: {query}\n"
+                  
+                  # 아티팩트 추가
+                  if artifacts and len(artifacts) > 0:
+                      content += "--------------------------------------------------\n"
+                      content += "Generated Files:\n"
+                      for artifact in artifacts:
+                          content += f"- {artifact['path']} : {artifact['description']}\n"
+                  
+                  content += "==================================================\n"
+                  
+                  # S3 키 생성
+                  s3_key = f"{prefix.rstrip('/')}/{file_name}" if prefix else file_name
+                  
+                  # S3에 파일 업로드
+                  s3_client.put_object(
+                      Bucket=bucket_name,
+                      Key=s3_key,
+                      Body=content.encode('utf-8'),
+                      ContentType='text/plain'
+                  )
+                  
+                  return {
+                      'message': '분석 결과가 성공적으로 저장되었습니다.',
+                      'file_name': file_name,
+                      's3_path': f"s3://{bucket_name}/{s3_key}"
+                  }
+                  
+              except Exception as e:
+                  print(f"처리 중 오류 발생: {str(e)}")
+                  traceback.print_exc()
+                  return {
+                      'error': f"처리 중 오류가 발생했습니다: {str(e)}"
+                  }
+
+          def read_analysis_from_s3_handler(event):
+              """
+              read_analysis_from_s3 함수의 핸들러
+              
+              Parameters:
+              - event: Lambda 이벤트 객체
+              
+              Returns:
+              - S3 읽기 결과를 포함하는 응답
+              """
+              # 파라미터 추출
+              s3_uri = get_named_parameter(event, "s3_uri")
+              file_name = get_named_parameter(event, "file_name")
+              agent_name = get_named_parameter(event, "agent_name")
+              
+              # S3 URI 파싱
+              if s3_uri.startswith('s3://'):
+                  s3_uri = s3_uri[5:]  # 's3://' 제거
+              
+              parts = s3_uri.split('/', 1)
+              bucket_name = parts[0]
+              prefix = parts[1] if len(parts) > 1 else ''
+              
+              # 함수 호출
+              if file_name:
+                  return read_specific_file(bucket_name, prefix, file_name)
+              elif agent_name:
+                  return read_agent_files(bucket_name, prefix, agent_name)
+              else:
+                  return read_all_files(bucket_name, prefix)
+
+          def read_specific_file(bucket_name, prefix, file_name):
+              """
+              특정 파일을 S3에서 읽어오는 함수
+              
+              Parameters:
+              - bucket_name: S3 버킷 이름
+              - prefix: S3 객체 접두사 (폴더 경로)
+              - file_name: 파일 이름
+              
+              Returns:
+              - 파일 내용을 포함하는 응답
+              """
+              try:
+                  if not bucket_name:
+                      return {'error': '버킷 이름이 제공되지 않았습니다.'}
+                  
+                  if not file_name:
+                      return {'error': '파일 이름이 제공되지 않았습니다.'}
+                  
+                  # S3 클라이언트 생성
+                  s3_client = boto3.client('s3')
+                  
+                  # S3 키 생성
+                  s3_key = f"{prefix.rstrip('/')}/{file_name}" if prefix else file_name
+                  
+                  # S3에서 파일 읽기
+                  response = s3_client.get_object(Bucket=bucket_name, Key=s3_key)
+                  content = response['Body'].read().decode('utf-8')
+                  
+                  # 분석 결과 파싱
+                  analyses = parse_results_file(content)
+                  
+                  return {
+                      'file_name': file_name,
+                      'analyses': analyses,
+                      'message': '파일을 성공적으로 로드했습니다.'
+                  }
+                  
+              except ClientError as e:
+                  print(f"S3 파일 로드 오류: {str(e)}")
+                  traceback.print_exc()
+                  return {
+                      'error': f"파일을 찾을 수 없습니다: {str(e)}"
+                  }
+              except Exception as e:
+                  print(f"처리 중 오류 발생: {str(e)}")
+                  traceback.print_exc()
+                  return {
+                      'error': f"처리 중 오류가 발생했습니다: {str(e)}"
+                  }
+
+          def read_agent_files(bucket_name, prefix, agent_name):
+              """
+              특정 에이전트의 모든 파일을 S3에서 읽어오는 함수
+              
+              Parameters:
+              - bucket_name: S3 버킷 이름
+              - prefix: S3 객체 접두사 (폴더 경로)
+              - agent_name: 에이전트 이름
+              
+              Returns:
+              - 파일 내용을 포함하는 응답
+              """
+              try:
+                  if not bucket_name:
+                      return {'error': '버킷 이름이 제공되지 않았습니다.'}
+                  
+                  if not agent_name:
+                      return {'error': '에이전트 이름이 제공되지 않았습니다.'}
+                  
+                  # S3 클라이언트 생성
+                  s3_client = boto3.client('s3')
+                  
+                  # S3 접두사 생성
+                  s3_prefix = f"{prefix.rstrip('/')}/{agent_name}_" if prefix else f"{agent_name}_"
+                  
+                  # S3에서 파일 목록 가져오기
+                  response = s3_client.list_objects_v2(
+                      Bucket=bucket_name,
+                      Prefix=s3_prefix
+                  )
+                  
+                  if 'Contents' not in response:
+                      return {
+                          'message': f"에이전트 {agent_name}의 파일을 찾을 수 없습니다.",
+                          'files': []
+                      }
+                  
+                  files = []
+                  all_analyses = []
+                  
+                  for obj in response['Contents']:
+                      file_name = obj['Key'].split('/')[-1]
+                      
+                      # S3에서 파일 읽기
+                      file_response = s3_client.get_object(Bucket=bucket_name, Key=obj['Key'])
+                      content = file_response['Body'].read().decode('utf-8')
+                      
+                      # 분석 결과 파싱
+                      analyses = parse_results_file(content)
+                      
+                      files.append({
+                          'file_name': file_name,
+                          'analyses': analyses
+                      })
+                      
+                      all_analyses.extend(analyses)
+                  
+                  return {
+                      'agent_name': agent_name,
+                      'files': files,
+                      'all_analyses': all_analyses,
+                      'message': f"에이전트 {agent_name}의 파일을 성공적으로 로드했습니다."
+                  }
+                  
+              except Exception as e:
+                  print(f"처리 중 오류 발생: {str(e)}")
+                  traceback.print_exc()
+                  return {
+                      'error': f"처리 중 오류가 발생했습니다: {str(e)}"
+                  }
+
+          def read_all_files(bucket_name, prefix):
+              """
+              모든 분석 결과 파일을 S3에서 읽어오는 함수
+              
+              Parameters:
+              - bucket_name: S3 버킷 이름
+              - prefix: S3 객체 접두사 (폴더 경로)
+              
+              Returns:
+              - 파일 내용을 포함하는 응답
+              """
+              try:
+                  if not bucket_name:
+                      return {'error': '버킷 이름이 제공되지 않았습니다.'}
+                  
+                  # S3 클라이언트 생성
+                  s3_client = boto3.client('s3')
+                  
+                  # S3 접두사 생성
+                  s3_prefix = prefix.rstrip('/') + '/' if prefix else ''
+                  
+                  # S3에서 파일 목록 가져오기
+                  response = s3_client.list_objects_v2(
+                      Bucket=bucket_name,
+                      Prefix=s3_prefix
+                  )
+                  
+                  if 'Contents' not in response:
+                      return {
+                          'message': "파일을 찾을 수 없습니다.",
+                          'files': []
+                      }
+                  
+                  files = []
+                  all_analyses = []
+                  
+                  for obj in response['Contents']:
+                      if not obj['Key'].endswith('.txt'):
+                          continue
+                          
+                      file_name = obj['Key'].split('/')[-1]
+                      
+                      # S3에서 파일 읽기
+                      file_response = s3_client.get_object(Bucket=bucket_name, Key=obj['Key'])
+                      content = file_response['Body'].read().decode('utf-8')
+                      
+                      # 분석 결과 파싱
+                      analyses = parse_results_file(content)
+                      
+                      files.append({
+                          'file_name': file_name,
+                          'analyses': analyses
+                      })
+                      
+                      all_analyses.extend(analyses)
+                  
+                  return {
+                      'files': files,
+                      'all_analyses': all_analyses,
+                      'message': "모든 파일을 성공적으로 로드했습니다."
+                  }
+                  
+              except Exception as e:
+                  print(f"처리 중 오류 발생: {str(e)}")
+                  traceback.print_exc()
+                  return {
+                      'error': f"처리 중 오류가 발생했습니다: {str(e)}"
+                  }
+
+          def list_analysis_files_handler(event):
+              """
+              list_analysis_files 함수의 핸들러
+              
+              Parameters:
+              - event: Lambda 이벤트 객체
+              
+              Returns:
+              - S3 파일 목록을 포함하는 응답
+              """
+              # 파라미터 추출
+              s3_uri = get_named_parameter(event, "s3_uri")
+              agent_name = get_named_parameter(event, "agent_name")
+              
+              # S3 URI 파싱
+              if s3_uri.startswith('s3://'):
+                  s3_uri = s3_uri[5:]  # 's3://' 제거
+              
+              parts = s3_uri.split('/', 1)
+              bucket_name = parts[0]
+              prefix = parts[1] if len(parts) > 1 else ''
+              
+              # 함수 호출
+              return list_analysis_files(bucket_name, prefix, agent_name)
+
+          def list_analysis_files(bucket_name, prefix, agent_name=None):
+              """
+              S3에 저장된 분석 파일 목록을 가져오는 함수
+              
+              Parameters:
+              - bucket_name: S3 버킷 이름
+              - prefix: S3 객체 접두사 (폴더 경로)
+              - agent_name: 에이전트 이름 (선택 사항)
+              
+              Returns:
+              - 파일 목록을 포함하는 응답
+              """
+              try:
+                  if not bucket_name:
+                      return {'error': '버킷 이름이 제공되지 않았습니다.'}
+                  
+                  # S3 클라이언트 생성
+                  s3_client = boto3.client('s3')
+                  
+                  # S3 접두사 생성
+                  s3_prefix = prefix.rstrip('/') + '/' if prefix else ''
+                  if agent_name:
+                      s3_prefix = f"{s3_prefix}{agent_name}_"
+                  
+                  # S3에서 파일 목록 가져오기
+                  response = s3_client.list_objects_v2(
+                      Bucket=bucket_name,
+                      Prefix=s3_prefix
+                  )
+                  
+                  if 'Contents' not in response:
+                      return {
+                          'message': "파일을 찾을 수 없습니다.",
+                          'files': []
+                      }
+                  
+                  files = []
+                  
+                  for obj in response['Contents']:
+                      if not obj['Key'].endswith('.txt'):
+                          continue
+                          
+                      file_name = obj['Key'].split('/')[-1]
+                      last_modified = obj['LastModified'].strftime("%Y-%m-%d %H:%M:%S")
+                      size = obj['Size']
+                      
+                      files.append({
+                          'file_name': file_name,
+                          'last_modified': last_modified,
+                          'size': size,
+                          's3_path': f"s3://{bucket_name}/{obj['Key']}"
+                      })
+                  
+                  return {
+                      'files': files,
+                      'count': len(files),
+                      'message': "파일 목록을 성공적으로 가져왔습니다."
+                  }
+                  
+              except Exception as e:
+                  print(f"처리 중 오류 발생: {str(e)}")
+                  traceback.print_exc()
+                  return {
+                      'error': f"처리 중 오류가 발생했습니다: {str(e)}"
+                  }
+
+          def delete_analysis_file_handler(event):
+              """
+              delete_analysis_file 함수의 핸들러
+              
+              Parameters:
+              - event: Lambda 이벤트 객체
+              
+              Returns:
+              - S3 파일 삭제 결과를 포함하는 응답
+              """
+              # 파라미터 추출
+              s3_uri = get_named_parameter(event, "s3_uri")
+              file_name = get_named_parameter(event, "file_name")
+              
+              # S3 URI 파싱
+              if s3_uri.startswith('s3://'):
+                  s3_uri = s3_uri[5:]  # 's3://' 제거
+              
+              parts = s3_uri.split('/', 1)
+              bucket_name = parts[0]
+              prefix = parts[1] if len(parts) > 1 else ''
+              
+              # 함수 호출
+              return delete_analysis_file(bucket_name, prefix, file_name)
+
+          def download_and_upload_image_to_s3(image_url, bucket_name, prefix, agent_name):
+              """
+              URL에서 이미지를 다운로드하여 S3에 업로드하는 함수
+              
+              Parameters:
+              - image_url: 이미지 URL
+              - bucket_name: S3 버킷 이름
+              - prefix: S3 객체 접두사 (폴더 경로)
+              - agent_name: 에이전트 이름
+              
+              Returns:
+              - 업로드된 이미지의 S3 경로와 파일 이름
+              """
+              try:
+                  # 이미지 URL에서 파일 이름 추출
+                  file_name = image_url.split('/')[-1]
+                  
+                  # 파일 확장자 확인
+                  if '.' not in file_name:
+                      file_name = f"{file_name}.jpg"  # 기본 확장자 추가
+                  
+                  # 고유한 파일 이름 생성
+                  unique_id = str(uuid.uuid4())[:8]
+                  file_name = f"{agent_name}_{unique_id}_{file_name}"
+                  
+                  # S3 키 생성
+                  s3_key = f"{prefix.rstrip('/')}/images/{file_name}" if prefix else f"images/{file_name}"
+                  
+                  # 이미지 다운로드
+                  response = requests.get(image_url, timeout=10)
+                  response.raise_for_status()  # HTTP 오류 발생 시 예외 발생
+                  
+                  # S3 클라이언트 생성
+                  s3_client = boto3.client('s3')
+                  
+                  # S3에 이미지 업로드
+                  s3_client.upload_fileobj(
+                      BytesIO(response.content),
+                      bucket_name,
+                      s3_key,
+                      ExtraArgs={'ContentType': response.headers.get('Content-Type', 'image/jpeg')}
+                  )
+                  
+                  return {
+                      'file_name': file_name,
+                      's3_path': f"s3://{bucket_name}/{s3_key}",
+                      'original_url': image_url
+                  }
+                  
+              except Exception as e:
+                  print(f"이미지 다운로드 및 업로드 중 오류 발생: {str(e)}")
+                  traceback.print_exc()
+                  return {
+                      'error': f"이미지 처리 중 오류가 발생했습니다: {str(e)}",
+                      'original_url': image_url
+                  }
+
+          def delete_analysis_file(bucket_name, prefix, file_name):
+              """
+              S3에 저장된 분석 파일을 삭제하는 함수
+              
+              Parameters:
+              - bucket_name: S3 버킷 이름
+              - prefix: S3 객체 접두사 (폴더 경로)
+              - file_name: 파일 이름
+              
+              Returns:
+              - 삭제 결과를 포함하는 응답
+              """
+              try:
+                  if not bucket_name:
+                      return {'error': '버킷 이름이 제공되지 않았습니다.'}
+                  
+                  if not file_name:
+                      return {'error': '파일 이름이 제공되지 않았습니다.'}
+                  
+                  # S3 클라이언트 생성
+                  s3_client = boto3.client('s3')
+                  
+                  # S3 키 생성
+                  s3_key = f"{prefix.rstrip('/')}/{file_name}" if prefix else file_name
+                  
+                  # S3에서 파일 삭제
+                  s3_client.delete_object(
+                      Bucket=bucket_name,
+                      Key=s3_key
+                  )
+                  
+                  return {
+                      'message': '파일이 성공적으로 삭제되었습니다.',
+                      'file_name': file_name,
+                      's3_path': f"s3://{bucket_name}/{s3_key}"
+                  }
+                  
+              except Exception as e:
+                  print(f"처리 중 오류 발생: {str(e)}")
+                  traceback.print_exc()
+                  return {
+                      'error': f"처리 중 오류가 발생했습니다: {str(e)}"
+                  }
+
+          def process_tavily_images_handler(event):
+              """
+              process_tavily_images 함수의 핸들러
+              
+              Parameters:
+              - event: Lambda 이벤트 객체
+              
+              Returns:
+              - 이미지 처리 결과를 포함하는 응답
+              """
+              # 파라미터 추출
+              s3_uri = get_named_parameter(event, "s3_uri")
+              agent_name = get_named_parameter(event, "agent_name")
+              tavily_response = get_named_parameter(event, "tavily_response")
+              
+              # 함수 호출
+              return process_tavily_images(s3_uri, agent_name, tavily_response)
+
+          def process_tavily_images(s3_uri, agent_name, tavily_response):
+              """
+              Tavily API 응답에서 이미지 URL을 추출하여 S3에 저장하는 함수
+              
+              Parameters:
+              - s3_uri: S3 URI (형식: s3://bucket-name/prefix)
+              - agent_name: 에이전트 이름
+              - tavily_response: Tavily API 응답 (JSON 문자열)
+              
+              Returns:
+              - 이미지 처리 결과와 출처 URL을 포함하는 응답
+              """
+              try:
+                  if not s3_uri:
+                      return {'error': 'S3 URI가 제공되지 않았습니다.'}
+                  
+                  if not agent_name:
+                      return {'error': '에이전트 이름이 제공되지 않았습니다.'}
+                  
+                  if not tavily_response:
+                      return {'error': 'Tavily API 응답이 제공되지 않았습니다.'}
+                  
+                  # S3 URI 파싱
+                  if s3_uri.startswith('s3://'):
+                      s3_uri = s3_uri[5:]  # 's3://' 제거
+                  
+                  parts = s3_uri.split('/', 1)
+                  bucket_name = parts[0]
+                  prefix = parts[1] if len(parts) > 1 else ''
+                  
+                  # tavily_response가 문자열인 경우 JSON으로 파싱
+                  if isinstance(tavily_response, str):
+                      try:
+                          tavily_data = json.loads(tavily_response)
+                      except json.JSONDecodeError:
+                          return {'error': 'Tavily API 응답을 JSON으로 파싱할 수 없습니다.'}
+                  else:
+                      tavily_data = tavily_response
+                  
+                  # 이미지 URL 추출
+                  image_urls = []
+                  
+                  # 출처 URL 추출
+                  source_urls = []
+                  
+                  # multi_search_results 형식 처리
+                  if 'multi_search_results' in tavily_data:
+                      for result in tavily_data['multi_search_results']:
+                          # 이미지 추출
+                          if 'images' in result and isinstance(result['images'], list):
+                              image_urls.extend(result['images'])
+                          
+                          # 출처 URL 추출
+                          if 'results' in result and isinstance(result['results'], list):
+                              for item in result['results']:
+                                  if 'url' in item:
+                                      source_urls.append({
+                                          'url': item['url'],
+                                          'title': item.get('title', ''),
+                                          'query': result.get('query', '')
+                                      })
+                  
+                  # 단일 검색 결과 형식 처리
+                  else:
+                      # 이미지 추출
+                      if 'images' in tavily_data and isinstance(tavily_data['images'], list):
+                          image_urls.extend(tavily_data['images'])
+                      
+                      # 출처 URL 추출
+                      if 'results' in tavily_data and isinstance(tavily_data['results'], list):
+                          for item in tavily_data['results']:
+                              if 'url' in item:
+                                  source_urls.append({
+                                      'url': item['url'],
+                                      'title': item.get('title', ''),
+                                      'query': tavily_data.get('query', '')
+                                  })
+                  
+                  # 이미지 다운로드 및 S3 업로드
+                  processed_images = []
+                  
+                  for image_url in image_urls:
+                      result = download_and_upload_image_to_s3(image_url, bucket_name, prefix, agent_name)
+                      processed_images.append(result)
+                  
+                  return {
+                      'message': f'{len(processed_images)}개의 이미지를 성공적으로 처리했습니다.',
+                      'images': processed_images,
+                      'sources': source_urls
+                  }
+                  
+              except Exception as e:
+                  print(f"처리 중 오류 발생: {str(e)}")
+                  traceback.print_exc()
+                  return {
+                      'error': f"처리 중 오류가 발생했습니다: {str(e)}"
+                  }
+
+  LambdaPutS3DataPermissionForBedrockAgentAlias:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt LambdaFunctionPutS3Data.Arn
+      Principal: bedrock.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:agent-alias/*
+
+  LambdaPutS3DataPermissionForBedrockAgent:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt LambdaFunctionPutS3Data.Arn
+      Principal: bedrock.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:agent/*
+
+
+  # Lambda function - get_s3_data
+  LambdaFunctionGetS3Data:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.10
+      Handler: index.lambda_handler
+      Architectures:
+        - x86_64
+      FunctionName: get_s3_data
+      Role: !GetAtt LambdaRoleActions.Arn
+      Timeout: 600
+      MemorySize: 512
+      EphemeralStorage:
+        Size: 512
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import base64
+          import os
+          import re
+          import traceback
+          from botocore.exceptions import ClientError
+
+          def get_named_parameter(event, name):
+              """
+              이벤트에서 특정 이름의 파라미터 값을 추출합니다.
+              
+              Parameters:
+              - event: Lambda 이벤트 객체
+              - name: 파라미터 이름
+              
+              Returns:
+              - 파라미터 값 또는 None (파라미터가 없는 경우)
+              """
+              print(f"파라미터 추출 시도: {name}, 이벤트 파라미터: {event.get('parameters', [])}")
+              for param in event.get('parameters', []):
+                  if param['name'] == name:
+                      print(f"파라미터 {name} 값: {param['value']}")
+                      return param['value']
+              print(f"파라미터 {name}을(를) 찾을 수 없음")
+              return None
+
+          def get_s3_data(s3_uri, load_images=True):
+              """
+              S3에서 분석 결과 파일과 이미지를 로드하는 함수
+              
+              Parameters:
+              - s3_uri: S3 URI (형식: s3://bucket-name/prefix)
+              - load_images: 이미지 파일도 로드할지 여부 (기본값: True)
+              
+              Returns:
+              - 분석 결과 및 이미지 데이터를 포함하는 응답
+              """
+              print(f"get_s3_data 함수 시작: s3_uri={s3_uri}, load_images={load_images}")
+              try:
+                  if not s3_uri:
+                      print("S3 URI가 제공되지 않았습니다.")
+                      return {
+                          'error': 'S3 URI가 제공되지 않았습니다.'
+                      }
+                  
+                  # S3 URI 파싱
+                  if s3_uri.startswith('s3://'):
+                      s3_uri = s3_uri[5:]  # 's3://' 제거
+                  
+                  parts = s3_uri.split('/', 1)
+                  bucket_name = parts[0]
+                  prefix = parts[1] if len(parts) > 1 else ''
+                  
+                  print(f"S3 URI 파싱 결과: bucket_name={bucket_name}, prefix={prefix}")
+                  
+                  # S3 클라이언트 생성
+                  print("S3 클라이언트 생성")
+                  s3_client = boto3.client('s3')
+                  
+                  # S3 객체 목록 가져오기
+                  print(f"S3 객체 목록 가져오기: bucket_name={bucket_name}, prefix={prefix}")
+                  response = s3_client.list_objects_v2(
+                      Bucket=bucket_name,
+                      Prefix=prefix
+                  )
+                  
+                  if 'Contents' not in response:
+                      print(f"S3 경로에 객체가 없습니다: {bucket_name}/{prefix}")
+                      return {
+                          'error': f"S3 경로에 객체가 없습니다: {bucket_name}/{prefix}"
+                      }
+                  
+                  # 텍스트 파일과 이미지 파일 분류
+                  txt_files = []
+                  img_files = []
+                  
+                  for obj in response['Contents']:
+                      key = obj['Key']
+                      if key.endswith('.txt'):
+                          txt_files.append(key)
+                          print(f"텍스트 파일 발견: {key}")
+                      elif key.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
+                          img_files.append(key)
+                          print(f"이미지 파일 발견: {key}")
+                  
+                  # 분석 결과 저장할 리스트
+                  analyses = []
+                  
+                  # 텍스트 파일 처리
+                  for txt_file in txt_files:
+                      try:
+                          print(f"텍스트 파일 처리 중: {txt_file}")
+                          response = s3_client.get_object(Bucket=bucket_name, Key=txt_file)
+                          content = response['Body'].read().decode('utf-8')
+                          print(f"텍스트 파일 내용 (처음 200자): {content[:200]}...")
+                          
+                          # 분석 결과 파싱
+                          file_analyses = parse_results_file(content)
+                          analyses.extend(file_analyses)
+                          print(f"파일에서 {len(file_analyses)}개의 분석 결과 추출")
+                      except Exception as e:
+                          print(f"텍스트 파일 처리 중 오류 발생: {txt_file}, 오류: {str(e)}")
+                          traceback.print_exc()
+                  
+                  # 이미지 파일 처리 (필요한 경우)
+                  if load_images:
+                      print("이미지 파일 로드 시작")
+                      analyses = load_image_files(s3_client, bucket_name, img_files, analyses)
+                      print("이미지 파일 로드 완료")
+                  
+                  print(f"get_s3_data 함수 완료: {len(analyses)}개의 분석 결과 추출")
+                  return {
+                      'analyses': analyses,
+                      'message': '데이터를 성공적으로 로드했습니다.'
+                  }
+                  
+              except Exception as e:
+                  print(f"처리 중 오류 발생: {str(e)}")
+                  traceback.print_exc()
+                  return {
+                      'error': f"처리 중 오류가 발생했습니다: {str(e)}"
+                  }
+
+          def parse_results_file(content):
+              """
+              결과 파일 내용을 파싱하여 분석 결과 목록을 반환합니다.
+              
+              Parameters:
+              - content: 결과 파일의 내용 (문자열)
+              
+              Returns:
+              - 분석 결과 목록 (딕셔너리 리스트)
+              """
+              print("parse_results_file 함수 시작")
+              analyses = []
+              
+              # 분석 결과 블록 분리
+              # 각 분석 결과는 ================================================== 로 구분됨
+              analysis_blocks = content.split("==================================================")
+              print(f"분석 블록 수: {len(analysis_blocks)}")
+              
+              for i, block in enumerate(analysis_blocks):
+                  if not block.strip():
+                      print(f"블록 {i+1}: 빈 블록, 건너뜀")
+                      continue
+                  
+                  print(f"블록 {i+1} 처리 중 (길이: {len(block)})")
+                  
+                  # 분석 이름 추출
+                  analysis_name_match = re.search(r'## Analysis Stage: (.*?)$', block, re.MULTILINE)
+                  analysis_name = analysis_name_match.group(1) if analysis_name_match else "분석 이름 없음"
+                  print(f"블록 {i+1} 분석 이름: {analysis_name}")
+                  
+                  # 실행 시간 추출
+                  time_match = re.search(r'## Execution Time: (.*?)$', block, re.MULTILINE)
+                  execution_time = time_match.group(1) if time_match else "시간 정보 없음"
+                  print(f"블록 {i+1} 실행 시간: {execution_time}")
+                  
+                  # 결과 설명 추출
+                  results_section = block.split("Result Description:", 1)
+                  results_text = ""
+                  if len(results_section) > 1:
+                      split_sections = results_section[1].split("--------------------------------------------------", 1)
+                      results_text = split_sections[0].strip()
+                      print(f"블록 {i+1} 결과 설명 길이: {len(results_text)}")
+                  else:
+                      print(f"블록 {i+1} '결과 설명:' 섹션을 찾을 수 없음")
+                  
+                  # 참조 출처 추출
+                  references = []
+                  references_section = block.split("References:", 1)
+                  if len(references_section) > 1:
+                      references_text = references_section[1].split("--------------------------------------------------", 1)[0].strip()
+                      print(f"블록 {i+1} 참조 출처 섹션 길이: {len(references_text)}")
+                      reference_lines = re.findall(r'(\d+)\. \[(.*?)\]\((.*?)\)(.*?)$', references_text, re.MULTILINE)
+                      print(f"블록 {i+1} 찾은 참조 출처 라인 수: {len(reference_lines)}")
+                      for num, title, url, query in reference_lines:
+                          query_text = query.strip()
+                          if query_text.startswith("- Query:"):
+                              query_text = query_text[8:].strip()
+                          references.append({
+                              "title": title,
+                              "url": url,
+                              "query": query_text
+                          })
+                  
+                  # 아티팩트 추출
+                  artifacts = []
+                  artifacts_section = block.split("Generated Files:", 1)
+                  if len(artifacts_section) > 1:
+                      artifacts_text = artifacts_section[1]
+                      print(f"블록 {i+1} 아티팩트 섹션 길이: {len(artifacts_text)}")
+                      artifact_lines = re.findall(r'- (.*?) : (.*?)$', artifacts_text, re.MULTILINE)
+                      print(f"블록 {i+1} 찾은 아티팩트 라인 수: {len(artifact_lines)}")
+                      artifacts = [{"path": path, "description": desc} for path, desc in artifact_lines]
+                      for j, (path, desc) in enumerate(artifact_lines):
+                          print(f"블록 {i+1} 아티팩트 {j+1}: 경로={path}, 설명={desc}")
+                  else:
+                      print(f"블록 {i+1} '생성된 파일:' 섹션을 찾을 수 없음")
+                      
+                  analyses.append({
+                      "name": analysis_name,
+                      "time": execution_time,
+                      "results": results_text,
+                      "references": references,
+                      "artifacts": artifacts
+                  })
+              
+              print(f"parse_results_file 함수 완료, 분석 결과 수: {len(analyses)}")
+              return analyses
+
+          def load_image_files(s3_client, bucket_name, img_files, analyses):
+              """
+              이미지 파일 정보를 S3에서 가져와 경로 정보만 추가합니다.
+              Base64 인코딩은 수행하지 않고 S3 경로만 제공합니다.
+              
+              Parameters:
+              - s3_client: boto3 S3 클라이언트
+              - bucket_name: S3 버킷 이름
+              - img_files: 이미지 파일 키 목록
+              - analyses: 분석 결과 목록 (수정됨)
+              
+              Returns:
+              - 수정된 분석 결과 목록
+              """
+              print("load_image_files 함수 시작 - 이미지 경로만 추가")
+              
+              # 이미지 파일 정보 맵 생성
+              image_info_map = {}
+              for img_key in img_files:
+                  try:
+                      print(f"이미지 파일 정보 추가: {bucket_name}/{img_key}")
+                      
+                      # 이미지 메타데이터만 가져오기
+                      try:
+                          response = s3_client.head_object(Bucket=bucket_name, Key=img_key)
+                          content_type = response.get('ContentType', 'image/jpeg')
+                      except:
+                          content_type = 'image/jpeg'  # 기본값
+                      
+                      # S3 URI 생성
+                      s3_uri = f"s3://{bucket_name}/{img_key}"
+                      
+                      # 이미지 정보 맵에 추가
+                      image_info_map[img_key] = {
+                          "s3_uri": s3_uri,
+                          "content_type": content_type
+                      }
+                      
+                  except Exception as e:
+                      print(f"이미지 파일 정보 추가 실패: {bucket_name}/{img_key}, 오류: {str(e)}")
+                      traceback.print_exc()
+              
+              # 분석 결과의 아티팩트에 이미지 정보 추가
+              for analysis in analyses:
+                  for artifact in analysis["artifacts"]:
+                      file_path = artifact["path"]
+                      
+                      # S3 URL 형식 처리 (s3://bucket-name/key 형식)
+                      if file_path.startswith('s3://'):
+                          print(f"S3 URL 형식 감지됨: {file_path}")
+                          # s3:// 제거 후 버킷 이름과 키 분리
+                          path_parts = file_path[5:].split('/', 1)
+                          if len(path_parts) == 2:
+                              s3_bucket = path_parts[0]
+                              s3_key = path_parts[1]
+                              print(f"S3 URL 파싱 결과: 버킷={s3_bucket}, 키={s3_key}")
+                          else:
+                              s3_bucket = bucket_name
+                              s3_key = file_path
+                              print(f"S3 URL 파싱 실패, 기본값 사용: 버킷={s3_bucket}, 키={s3_key}")
+                      else:
+                          # 일반 경로인 경우
+                          s3_key = file_path
+                      
+                      # 이미지 정보 맵에서 찾기
+                      for img_key in image_info_map:
+                          if img_key.endswith(s3_key) or s3_key.endswith(img_key):
+                              print(f"이미지 정보 매칭 성공: {s3_key} -> {img_key}")
+                              artifact["s3_uri"] = image_info_map[img_key]["s3_uri"]
+                              artifact["content_type"] = image_info_map[img_key]["content_type"]
+                              break
+              
+              print("load_image_files 함수 완료 - 이미지 경로만 추가됨")
+              return analyses
+
+          def lambda_handler(event, context):
+              """
+              Lambda 함수: S3에서 분석 결과 파일과 이미지를 로드하는 함수의 핸들러
+              
+              Parameters:
+              - event: Lambda 이벤트 객체
+              - context: Lambda 컨텍스트 객체
+              
+              Returns:
+              - 분석 결과 및 이미지 데이터를 포함하는 JSON 응답
+              """
+              print("lambda_handler 함수 시작")
+              print(f"이벤트: {json.dumps(event)}")
+              
+              try:
+                  action_group = event.get('actionGroup', '')
+                  message_version = event.get('messageVersion', '')
+                  function = event.get('function', '')
+                  
+                  print(f"액션 그룹: {action_group}, 메시지 버전: {message_version}, 함수: {function}")
+                  
+                  if function == 'get_s3_data':
+                      # 파라미터 추출
+                      s3_uri = get_named_parameter(event, "s3_uri")
+                      load_images = get_named_parameter(event, "load_images")
+                      
+                      print(f"파라미터: s3_uri={s3_uri}, load_images={load_images}")
+                      
+                      # load_images가 문자열로 전달될 경우 불리언으로 변환
+                      if isinstance(load_images, str):
+                          load_images = load_images.lower() == 'true'
+                          print(f"load_images 문자열을 불리언으로 변환: {load_images}")
+                      elif load_images is None:
+                          load_images = True
+                          print(f"load_images가 None이므로 기본값 사용: {load_images}")
+                      
+                      # 함수 호출
+                      print("get_s3_data 함수 호출")
+                      output = get_s3_data(s3_uri, load_images)
+                      print(f"get_s3_data 함수 결과: {json.dumps(output, ensure_ascii=False)[:200]}...")
+                  else:
+                      print(f"지원되지 않는 함수: {function}")
+                      output = {
+                          'error': f"지원되지 않는 함수: {function}"
+                      }
+                  
+                  # Bedrock Agent 응답 형식으로 변환
+                  action_response = {
+                      'actionGroup': action_group,
+                      'function': function,
+                      'functionResponse': {
+                          'responseBody': {'TEXT': {'body': json.dumps(output, ensure_ascii=False)}}
+                      }
+                  }
+                  
+                  function_response = {'response': action_response, 'messageVersion': message_version}
+                  print(f"응답 생성 완료: {json.dumps(function_response, ensure_ascii=False)[:200]}...")
+                  return function_response
+              
+              except Exception as e:
+                  print(f"lambda_handler 함수 처리 중 오류 발생: {str(e)}")
+                  traceback.print_exc()
+                  
+                  # 오류 발생 시에도 Bedrock Agent 응답 형식으로 반환
+                  error_response = {
+                      'response': {
+                          'actionGroup': event.get('actionGroup', ''),
+                          'function': event.get('function', ''),
+                          'functionResponse': {
+                              'responseBody': {'TEXT': {'body': json.dumps({'error': f"처리 중 오류가 발생했습니다: {str(e)}"}, ensure_ascii=False)}}
+                          }
+                      },
+                      'messageVersion': event.get('messageVersion', '')
+                  }
+                  return error_response
+  
+  LambdaGetS3DataPermissionForBedrockAgentAlias:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt LambdaFunctionGetS3Data.Arn
+      Principal: bedrock.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:agent-alias/*
+
+  LambdaGetS3DataPermissionForBedrockAgent:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt LambdaFunctionGetS3Data.Arn
+      Principal: bedrock.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:agent/*
+
+    
+  # Lambda function - generate_report
+  LambdaFunctionGenerateReport:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.10
+      Handler: index.lambda_handler
+      Architectures:
+        - x86_64
+      Layers: 
+        - !Ref LambdaLayerForAll
+      FunctionName: generate_report
+      Role: !GetAtt LambdaRoleActions.Arn
+      Timeout: 600
+      MemorySize: 512
+      EphemeralStorage:
+        Size: 512
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import base64
+          import os
+          import re
+          import ast
+          import traceback
+          from datetime import datetime
+          from botocore.exceptions import ClientError
+
+          def get_named_parameter(event, name):
+              """
+              이벤트에서 특정 이름의 파라미터 값을 추출합니다.
+              
+              Parameters:
+              - event: Lambda 이벤트 객체
+              - name: 파라미터 이름
+              
+              Returns:
+              - 파라미터 값 또는 None (파라미터가 없는 경우)
+              """
+              print(f"파라미터 추출 시도: {name}, 이벤트 파라미터: {event.get('parameters', [])}")
+              for param in event.get('parameters', []):
+                  if param['name'] == name:
+                      print(f"파라미터 {name} 값: {param['value'][:100] if isinstance(param['value'], str) and len(param['value']) > 100 else param['value']}")
+                      return param['value']
+              print(f"파라미터 {name}을(를) 찾을 수 없음")
+              return None
+
+          def generate_report(s3_uri, analyses, report_format='html', report_title='분석 보고서', report_language='ko'):
+              """
+              분석 결과를 기반으로 보고서를 생성하는 함수
+              
+              Parameters:
+              - s3_uri: S3 URI (형식: s3://bucket-name/prefix)
+              - analyses: 분석 결과 목록
+              - report_format: 보고서 형식 ('html', 'pdf', 'markdown' 중 하나)
+              - report_title: 보고서 제목
+              - report_language: 보고서 언어 ('ko' 또는 'en')
+              
+              Returns:
+              - 생성된 보고서 파일의 S3 URL을 포함하는 응답
+              """
+              print(f"generate_report 함수 시작: s3_uri={s3_uri}, format={report_format}, title={report_title}, language={report_language}")
+              
+              try:
+                  if not s3_uri:
+                      print("S3 URI가 제공되지 않았습니다.")
+                      return {
+                          'error': 'S3 URI가 제공되지 않았습니다.'
+                      }
+                      
+                  if not analyses:
+                      print("분석 결과가 제공되지 않았습니다.")
+                      return {
+                          'error': '분석 결과가 제공되지 않았습니다.'
+                      }
+                  
+                  # 분석 결과 검증
+                  valid_analyses = []
+                  for analysis in analyses:
+                      if not isinstance(analysis, dict):
+                          print(f"유효하지 않은 분석 결과 형식: {type(analysis)}")
+                          continue
+                          
+                      # 필수 필드만 검증 (name과 results만 필수로 변경)
+                      if 'name' not in analysis or 'results' not in analysis:
+                          print(f"필수 필드가 없는 분석 결과: {list(analysis.keys())}")
+                          continue
+                      
+                      # references 필드가 없으면 빈 배열로 초기화
+                      if 'references' not in analysis:
+                          analysis['references'] = []
+                          
+                      # artifacts 필드가 없으면 빈 배열로 초기화
+                      if 'artifacts' not in analysis:
+                          analysis['artifacts'] = []
+                          
+                      valid_analyses.append(analysis)
+                      
+                  if not valid_analyses:
+                      print("유효한 분석 결과가 없습니다.")
+                      return {
+                          'error': '유효한 분석 결과가 제공되지 않았습니다.'
+                      }
+                      
+                  analyses = valid_analyses
+                  print(f"유효한 분석 결과 수: {len(analyses)}")
+                  
+                  # S3 URI 파싱
+                  if s3_uri.startswith('s3://'):
+                      s3_uri = s3_uri[5:]  # 's3://' 제거
+                  
+                  parts = s3_uri.split('/', 1)
+                  bucket_name = parts[0]
+                  prefix = parts[1] if len(parts) > 1 else ''
+                  
+                  # S3 클라이언트 생성
+                  s3_client = boto3.client('s3')
+                  
+                  # 현재 시간을 파일 이름에 포함
+                  timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                  
+                  # 보고서 생성
+                  print(f"보고서 생성 시작: {report_format}")
+                  if report_format == 'html':
+                      report_content, content_type = generate_html_report(analyses, report_title, report_language)
+                      file_extension = 'html'
+                  elif report_format == 'pdf':
+                      # HTML을 먼저 생성한 후 PDF로 변환
+                      print("HTML 생성 후 PDF로 변환")
+                      html_content, _ = generate_html_report(analyses, report_title, report_language)
+                      report_content = convert_html_to_pdf(html_content, report_language)
+                      content_type = 'application/pdf'
+                      file_extension = 'pdf'
+                  elif report_format == 'markdown':
+                      report_content, content_type = generate_markdown_report(analyses, report_title, report_language)
+                      file_extension = 'md'
+                  else:
+                      print(f"지원되지 않는 보고서 형식: {report_format}")
+                      return {
+                          'error': f"지원되지 않는 보고서 형식: {report_format}"
+                      }
+                  
+                  print(f"보고서 생성 완료: {len(report_content)} 바이트, 콘텐츠 타입: {content_type}")
+                  
+                  # 보고서 파일 이름 생성
+                  report_filename = f"report_{timestamp}.{file_extension}"
+                  report_key = f"{prefix.rstrip('/')}/reports/{report_filename}" if prefix else f"reports/{report_filename}"
+                  
+                  print(f"보고서 파일 업로드: {bucket_name}/{report_key}")
+                  
+                  # 보고서 파일을 S3에 업로드
+                  s3_client.put_object(
+                      Bucket=bucket_name,
+                      Key=report_key,
+                      Body=report_content,
+                      ContentType=content_type
+                  )
+                  
+                  # 보고서 파일에 대한 S3 URL 생성
+                  report_url = f"https://{bucket_name}.s3.amazonaws.com/{report_key}"
+                  print(f"보고서 URL: {report_url}")
+                  
+                  return {
+                      'report_url': report_url,
+                      'report_format': report_format,
+                      'message': '보고서가 성공적으로 생성되었습니다.'
+                  }
+                  
+              except Exception as e:
+                  print(f"보고서 생성 중 오류 발생: {str(e)}")
+                  traceback.print_exc()
+                  return {
+                      'error': f"보고서 생성 중 오류가 발생했습니다: {str(e)}"
+                  }
+
+          def generate_html_report(analyses, report_title, language='ko'):
+              """
+              분석 결과를 기반으로 HTML 보고서를 생성합니다.
+              
+              Parameters:
+              - analyses: 분석 결과 목록
+              - report_title: 보고서 제목
+              - language: 보고서 언어 ('ko' 또는 'en')
+              
+              Returns:
+              - HTML 보고서 내용 및 콘텐츠 타입
+              """
+              print(f"generate_html_report 함수 시작: title={report_title}, language={language}")
+              print(f"analyses 타입: {type(analyses)}, 길이: {len(analyses) if isinstance(analyses, list) else 'N/A'}")
+              
+              # 언어에 따른 텍스트 설정
+              texts = {
+                  'ko': {
+                      'summary': '요약',
+                      'key_findings': '주요 발견사항',
+                      'detailed_analysis': '상세 분석',
+                      'conclusions': '결론 및 권장사항',
+                      'execution_time': '실행 시간',
+                      'no_artifacts': '생성된 아티팩트 없음',
+                      'generated_files': '생성된 파일'
+                  },
+                  'en': {
+                      'summary': 'Summary',
+                      'key_findings': 'Key Findings',
+                      'detailed_analysis': 'Detailed Analysis',
+                      'conclusions': 'Conclusions & Recommendations',
+                      'execution_time': 'Execution Time',
+                      'no_artifacts': 'No artifacts generated',
+                      'generated_files': 'Generated Files'
+                  }
+              }
+              
+              # 기본 언어를 한국어로 설정
+              t = texts.get(language, texts['ko'])
+              print(f"언어 설정: {language}, 텍스트: {t}")
+              
+              # HTML 헤더 생성
+              print("HTML 헤더 생성")
+              html = f"""<!DOCTYPE html>
+          <html>
+          <head>
+              <meta charset="UTF-8">
+              <title>{report_title}</title>
+              <style>
+                  body {{
+                      font-family: {'"Nanum Gothic", sans-serif' if language == 'ko' else '"Noto Sans", sans-serif'};
+                      margin: 2cm;
+                      line-height: 1.5;
+                  }}
+                  h1 {{
+                      color: #2c3e50;
+                      text-align: center;
+                      border-bottom: 2px solid #3498db;
+                      padding-bottom: 10px;
+                  }}
+                  h2 {{
+                      color: #3498db;
+                      margin-top: 20px;
+                      border-bottom: 1px solid #ddd;
+                      padding-bottom: 5px;
+                  }}
+                  h3 {{
+                      color: #2c3e50;
+                      margin-top: 15px;
+                  }}
+                  .content {{
+                      margin-top: 20px;
+                  }}
+                  img {{
+                      max-width: 100%;
+                      height: auto;
+                      display: block;
+                      margin: 20px auto;
+                      border: 1px solid #ddd;
+                  }}
+                  .image-caption {{
+                      text-align: center;
+                      font-style: italic;
+                      margin-bottom: 20px;
+                  }}
+                  table {{
+                      width: 100%;
+                      border-collapse: collapse;
+                      margin: 20px 0;
+                  }}
+                  table, th, td {{
+                      border: 1px solid #ddd;
+                  }}
+                  th, td {{
+                      padding: 8px;
+                      text-align: left;
+                  }}
+                  th {{
+                      background-color: #f2f2f2;
+                  }}
+                  .artifact-list {{
+                      margin-left: 20px;
+                  }}
+                  .timestamp {{
+                      color: #7f8c8d;
+                      font-size: 0.9em;
+                  }}
+              </style>
+          </head>
+          <body>
+              <h1>{report_title}</h1>
+              
+              <h2>{t['summary']}</h2>
+              <div class="content">
+                  <p>이 보고서는 {len(analyses)}개의 분석 단계에서 생성된 결과를 종합한 것입니다.</p>
+              </div>
+              
+              <h2>{t['key_findings']}</h2>
+              <div class="content">
+                  <ul>
+          """
+              
+              # 주요 발견사항 추가
+              print("주요 발견사항 추가")
+              for i, analysis in enumerate(analyses):
+                  try:
+                      print(f"분석 {i+1} 발견사항 추가: {analysis['name']}")
+                      html += f"            <li><strong>{analysis['name']}</strong>: {analysis['results']}</li>\n"
+                  except Exception as e:
+                      print(f"분석 {i+1} 발견사항 추가 중 오류: {str(e)}")
+                      print(f"분석 {i+1} 내용: {analysis}")
+                      traceback.print_exc()
+              
+              html += """        </ul>
+              </div>
+              
+              <h2>{}</h2>
+          """.format(t['detailed_analysis'])
+              
+              # 각 분석 단계에 대한 상세 내용 추가
+              print("상세 분석 내용 추가")
+              for i, analysis in enumerate(analyses):
+                  try:
+                      print(f"분석 {i+1} 상세 내용 추가: {analysis['name']}")
+                      html += f"""    <div class="content">
+                  <h3>{analysis['name']}</h3>
+                  <p class="timestamp">{t['execution_time']}: {analysis['time']}</p>
+          """
+                      
+                      # 결과 텍스트 처리 - 불렛 포인트와 줄바꿈 개선
+                      results_text = analysis['results']
+                      
+                      # 불렛 포인트(•) 처리
+                      if '•' in results_text:
+                          # 불렛 포인트로 분리
+                          sections = results_text.split('•')
+                          
+                          # 첫 번째 섹션은 일반 텍스트로 처리
+                          if sections[0].strip():
+                              html += f"        <p>{sections[0].strip()}</p>\n\n"
+                          
+                          # 나머지 섹션은 불렛 포인트로 처리
+                          if len(sections) > 1:
+                              html += "        <ul>\n"
+                              for section in sections[1:]:
+                                  if not section.strip():
+                                      continue
+                                  
+                                  # 하위 불렛 포인트(-) 처리
+                                  if '-' in section:
+                                      main_point = section.split('-')[0].strip()
+                                      sub_points = section.split('-')[1:]
+                                      
+                                      html += f"            <li>{main_point}\n"
+                                      html += "                <ul>\n"
+                                      for sub_point in sub_points:
+                                          if sub_point.strip():
+                                              html += f"                    <li>{sub_point.strip()}</li>\n"
+                                      html += "                </ul>\n"
+                                      html += "            </li>\n"
+                                  else:
+                                      html += f"            <li>{section.strip()}</li>\n"
+                              html += "        </ul>\n\n"
+                      # 일반 텍스트 처리
+                      else:
+                          # 줄바꿈 처리
+                          paragraphs = results_text.split('\n\n')
+                          for paragraph in paragraphs:
+                              if not paragraph.strip():
+                                  continue
+                              
+                              # 번호 목록 처리 (1. 2. 3. 등)
+                              if re.search(r'^\d+\.', paragraph.strip()):
+                                  lines = paragraph.strip().split('\n')
+                                  html += "        <ol>\n"
+                                  for line in lines:
+                                      if re.search(r'^\d+\.', line.strip()):
+                                          item_text = re.sub(r'^\d+\.', '', line.strip()).strip()
+                                          html += f"            <li>{item_text}</li>\n"
+                                  html += "        </ol>\n\n"
+                              else:
+                                  html += f"        <p>{paragraph.strip()}</p>\n\n"
+                      
+                      html += f"""        
+                  <h4>{t['generated_files']}</h4>
+          """
+                      
+                      if not analysis['artifacts']:
+                          print(f"분석 {i+1}: 아티팩트 없음")
+                          html += f"        <p>{t['no_artifacts']}</p>\n"
+                      else:
+                          print(f"분석 {i+1}: {len(analysis['artifacts'])}개의 아티팩트 추가")
+                          html += "        <div class=\"artifact-list\">\n"
+                          
+                          for j, artifact in enumerate(analysis['artifacts']):
+                              try:
+                                  print(f"분석 {i+1}, 아티팩트 {j+1} 추가: {artifact['path']}")
+                                  html += f"            <p><strong>{artifact['path']}</strong>: {artifact['description']}</p>\n"
+                                  
+                                  # 이미지 S3 URI가 있는 경우 이미지 추가
+                                  if 's3_uri' in artifact:
+                                      print(f"분석 {i+1}, 아티팩트 {j+1}: 이미지 S3 URI 추가")
+                                      s3_uri = artifact['s3_uri']
+                                      
+                                      # S3에서 이미지 파일 로드
+                                      try:
+                                          # S3 URI 파싱
+                                          if s3_uri.startswith('s3://'):
+                                              s3_uri = s3_uri[5:]  # 's3://' 제거
+                                          
+                                          parts = s3_uri.split('/', 1)
+                                          img_bucket = parts[0]
+                                          img_key = parts[1] if len(parts) > 1 else ''
+                                          
+                                          # S3에서 이미지 파일 로드
+                                          try:
+                                              print(f"S3에서 이미지 로드 시도: {img_bucket}/{img_key}")
+                                              img_response = s3_client.get_object(Bucket=img_bucket, Key=img_key)
+                                              image_data = img_response['Body'].read()
+                                              
+                                              # Base64로 인코딩
+                                              base64_image = base64.b64encode(image_data).decode('utf-8')
+                                              content_type = artifact.get('content_type', img_response.get('ContentType', 'image/jpeg'))
+                                              
+                                              html += f"""            <div class="image-container">
+                          <img src="data:{content_type};base64,{base64_image}" alt="{artifact['description']}">
+                          <div class="image-caption">{artifact['description']}</div>
+                      </div>
+          """
+                                          except Exception as e:
+                                              print(f"이미지 로드 실패: {s3_uri}, 오류: {str(e)}")
+                                              html += f"            <p><em>이미지를 찾을 수 없습니다: {artifact['description']}</em></p>\n"
+                                              base64_image = base64.b64encode(image_data).decode('utf-8')
+                                              content_type = artifact.get('content_type', img_response.get('ContentType', 'image/jpeg'))
+                                              
+                                              html += f"""            <div class="image-container">
+                          <img src="data:{content_type};base64,{base64_image}" alt="{artifact['description']}">
+                          <div class="image-caption">{artifact['description']}</div>
+                      </div>
+          """
+                                          except Exception as e:
+                                              print(f"이미지 로드 실패: {s3_uri}, 오류: {str(e)}")
+                                              html += f"            <p><em>이미지를 찾을 수 없습니다: {artifact['description']}</em></p>\n"
+                                      except Exception as e:
+                                          print(f"이미지 처리 중 오류 발생: {str(e)}")
+                                          html += f"            <p><em>이미지 처리 중 오류 발생: {artifact['description']}</em></p>\n"
+                                              
+                                          # 경로에서 파일명만 추출
+                                          filename = img_key.split('/')[-1]
+                                          
+                                          # 다양한 경로 패턴 시도
+                                          alternative_paths = [
+                                              f"images/{filename}",
+                                              f"reports/images/{filename}",
+                                              f"data/images/{filename}"
+                                          ]
+                                          
+                                          image_found = False
+                                          for alt_path in alternative_paths:
+                                              try:
+                                                  print(f"대체 경로 시도: {img_bucket}/{alt_path}")
+                                                  img_response = s3_client.get_object(Bucket=img_bucket, Key=alt_path)
+                                                  image_data = img_response['Body'].read()
+                                                  img_key = alt_path  # 성공한 경로로 업데이트
+                                                  image_found = True
+                                                  print(f"대체 경로에서 이미지 찾음: {alt_path}")
+                                                  break
+                                              except Exception:
+                                                  continue
+                                          
+                                          if not image_found:
+                                              raise Exception(f"이미지를 찾을 수 없습니다: {s3_uri}")
+                                          
+                                          # 이미지 타입 결정
+                                          content_type = img_response.get('ContentType', '')
+                                          if not content_type or content_type == 'binary/octet-stream':
+                                              # 파일 확장자로 콘텐츠 타입 추정
+                                              if img_key.lower().endswith('.jpg') or img_key.lower().endswith('.jpeg'):
+                                                  content_type = 'image/jpeg'
+                                              elif img_key.lower().endswith('.png'):
+                                                  content_type = 'image/png'
+                                              elif img_key.lower().endswith('.gif'):
+                                                  content_type = 'image/gif'
+                                              else:
+                                                  content_type = 'image/jpeg'  # 기본값
+                                          
+                                          # Base64로 인코딩
+                                          base64_image = base64.b64encode(image_data).decode('utf-8')
+                                          
+                                          print(f"이미지 로드 성공: {len(image_data)} 바이트, 콘텐츠 타입: {content_type}")
+                                          
+                                          html += f"""            <div class="image-container">
+                          <img src="data:{content_type};base64,{base64_image}" alt="{artifact['description']}">
+                          <div class="image-caption">{artifact['description']}</div>
+                      </div>
+          """
+                                      except Exception as e:
+                                          print(f"이미지 로드 실패: {s3_uri}, 오류: {str(e)}")
+                                          traceback.print_exc()
+                                          html += f"            <p><em>이미지 로드 실패: {s3_uri} - {str(e)}</em></p>\n"
+                                  # path 필드를 사용하여 이미지 추가 (s3_uri가 없는 경우)
+                                  elif 'path' in artifact and (artifact['path'].lower().endswith('.jpg') or 
+                                                            artifact['path'].lower().endswith('.jpeg') or 
+                                                            artifact['path'].lower().endswith('.png') or 
+                                                            artifact['path'].lower().endswith('.gif')):
+                                      print(f"분석 {i+1}, 아티팩트 {j+1}: 이미지 경로 발견 - {artifact['path']}")
+                                      
+                                      # S3 URI 파싱
+                                      s3_uri = artifact['path']
+                                      if s3_uri.startswith('s3://'):
+                                          s3_uri = s3_uri[5:]  # 's3://' 제거
+                                      
+                                      parts = s3_uri.split('/', 1)
+                                      img_bucket = parts[0]
+                                      img_key = parts[1] if len(parts) > 1 else ''
+                                      
+                                      # S3 클라이언트 생성
+                                      s3_client = boto3.client('s3')
+                                      
+                                      try:
+                                          # S3에서 이미지 파일 로드
+                                          try:
+                                              print(f"S3에서 이미지 로드 시도: {img_bucket}/{img_key}")
+                                              img_response = s3_client.get_object(Bucket=img_bucket, Key=img_key)
+                                              image_data = img_response['Body'].read()
+                                              
+                                              # 이미지 타입 결정
+                                              content_type = img_response.get('ContentType', '')
+                                              if not content_type or content_type == 'binary/octet-stream':
+                                                  # 파일 확장자로 콘텐츠 타입 추정
+                                                  if img_key.lower().endswith('.jpg') or img_key.lower().endswith('.jpeg'):
+                                                      content_type = 'image/jpeg'
+                                                  elif img_key.lower().endswith('.png'):
+                                                      content_type = 'image/png'
+                                                  elif img_key.lower().endswith('.gif'):
+                                                      content_type = 'image/gif'
+                                                  else:
+                                                      content_type = 'image/jpeg'  # 기본값
+                                              
+                                              # Base64로 인코딩
+                                              base64_image = base64.b64encode(image_data).decode('utf-8')
+                                              
+                                              print(f"이미지 로드 성공: {len(image_data)} 바이트, 콘텐츠 타입: {content_type}")
+                                              
+                                              html += f"""            <div class="image-container">
+                          <img src="data:{content_type};base64,{base64_image}" alt="{artifact['description']}">
+                          <div class="image-caption">{artifact['description']}</div>
+                      </div>
+          """
+                                          except Exception as e:
+                                              print(f"이미지 로드 실패: {s3_uri}, 오류: {str(e)}")
+                                              html += f"            <p><em>이미지를 찾을 수 없습니다: {artifact['description']}</em></p>\n"
+                                              content_type = img_response.get('ContentType', '')
+                                              if not content_type or content_type == 'binary/octet-stream':
+                                                  # 파일 확장자로 콘텐츠 타입 추정
+                                                  if img_key.lower().endswith('.jpg') or img_key.lower().endswith('.jpeg'):
+                                                      content_type = 'image/jpeg'
+                                                  elif img_key.lower().endswith('.png'):
+                                                      content_type = 'image/png'
+                                                  elif img_key.lower().endswith('.gif'):
+                                                      content_type = 'image/gif'
+                                                  else:
+                                                      content_type = 'image/jpeg'  # 기본값
+                                              
+                                              # Base64로 인코딩
+                                              base64_image = base64.b64encode(image_data).decode('utf-8')
+                                              
+                                              print(f"이미지 로드 성공: {len(image_data)} 바이트, 콘텐츠 타입: {content_type}")
+                                              
+                                              html += f"""            <div class="image-container">
+                          <img src="data:{content_type};base64,{base64_image}" alt="{artifact['description']}">
+                          <div class="image-caption">{artifact['description']}</div>
+                      </div>
+          """
+                                          except Exception as e:
+                                              print(f"이미지 로드 실패: {s3_uri}, 오류: {str(e)}")
+                                              html += f"            <p><em>이미지를 찾을 수 없습니다: {artifact['description']}</em></p>\n"
+                                      except Exception as e:
+                                          print(f"이미지 처리 중 오류 발생: {str(e)}")
+                                          html += f"            <p><em>이미지 처리 중 오류 발생: {artifact['description']}</em></p>\n"
+                                          img_response = s3_client.get_object(Bucket=img_bucket, Key=img_key)
+                                          image_data = img_response['Body'].read()
+                                          
+                                          # 이미지 타입 결정
+                                          content_type = img_response.get('ContentType', '')
+                                          if not content_type or content_type == 'binary/octet-stream':
+                                              # 파일 확장자로 콘텐츠 타입 추정
+                                              if img_key.lower().endswith('.jpg') or img_key.lower().endswith('.jpeg'):
+                                                  content_type = 'image/jpeg'
+                                              elif img_key.lower().endswith('.png'):
+                                                  content_type = 'image/png'
+                                              elif img_key.lower().endswith('.gif'):
+                                                  content_type = 'image/gif'
+                                              else:
+                                                  content_type = 'image/jpeg'  # 기본값
+                                          
+                                          # Base64로 인코딩
+                                          base64_image = base64.b64encode(image_data).decode('utf-8')
+                                          
+                                          print(f"이미지 로드 성공: {len(image_data)} 바이트, 콘텐츠 타입: {content_type}")
+                                          
+                                          html += f"""            <div class="image-container">
+                      <img src="data:{content_type};base64,{base64_image}" alt="{artifact['description']}">
+                      <div class="image-caption">{artifact['description']}</div>
+                  </div>
+          """
+                                      except Exception as e:
+                                          print(f"이미지 로드 실패: {s3_uri}, 오류: {str(e)}")
+                                          html += f"            <p><em>이미지를 찾을 수 없습니다: {artifact['description']}</em></p>\n"
+                                      except Exception as e:
+                                          print(f"이미지 처리 중 오류 발생: {str(e)}")
+                                          html += f"            <p><em>이미지 처리 중 오류 발생: {artifact['description']}</em></p>\n"
+                                      except Exception as e:
+                                          print(f"이미지 로드 실패: {s3_uri}, 오류: {str(e)}")
+                                          traceback.print_exc()
+                                          html += f"            <p><em>이미지 로드 실패: {s3_uri} - {str(e)}</em></p>\n"
+                              except Exception as e:
+                                  print(f"분석 {i+1}, 아티팩트 {j+1} 추가 중 오류: {str(e)}")
+                                  print(f"아티팩트 내용: {artifact}")
+                                  traceback.print_exc()
+                          
+                          html += "        </div>\n"
+                      
+                      html += "    </div>\n"
+                  except Exception as e:
+                      print(f"분석 {i+1} 상세 내용 추가 중 오류: {str(e)}")
+                      print(f"분석 내용: {analysis}")
+                      traceback.print_exc()
+              
+              # 결론 섹션 추가
+              print("결론 섹션 추가")
+              html += f"""    <h2>{t['conclusions']}</h2>
+              <div class="content">
+                  <p>분석 결과를 종합하면, 다음과 같은 결론을 내릴 수 있습니다:</p>
+                  <ul>
+          """
+              
+              # 각 분석에서 주요 결론 추출
+              for i, analysis in enumerate(analyses):
+                  try:
+                      print(f"분석 {i+1} 결론 추출: {analysis['name']}")
+                      # 결과 텍스트에서 주요 문장 추출 (마지막 문장 또는 첫 문장) 
+                      result_text = analysis['results']
+                      sentences = re.split(r'(?<=[.!?])\s+', result_text)
+                      
+                      if sentences:
+                          conclusion = sentences[-1] if len(sentences) > 1 else sentences[0]
+                          html += f"            <li>{conclusion}</li>\n"
+                  except Exception as e:
+                      print(f"분석 {i+1} 결론 추출 중 오류: {str(e)}")
+                      traceback.print_exc()
+              
+              # HTML 푸터 추가
+              html += """        </ul>
+              </div>
+          </body>
+          </html>"""
+              
+              print(f"HTML 보고서 생성 완료: {len(html)} 문자")
+              return html.encode('utf-8'), 'text/html'
+
+          def generate_markdown_report(analyses, report_title, language='ko'):
+              """
+              분석 결과를 기반으로 마크다운 보고서를 생성합니다.
+              
+              Parameters:
+              - analyses: 분석 결과 목록
+              - report_title: 보고서 제목
+              - language: 보고서 언어 ('ko' 또는 'en')
+              
+              Returns:
+              - 마크다운 보고서 내용 및 콘텐츠 타입
+              """
+              print(f"generate_markdown_report 함수 시작: title={report_title}, language={language}")
+              print(f"analyses 타입: {type(analyses)}, 길이: {len(analyses) if isinstance(analyses, list) else 'N/A'}")
+              
+              # 언어에 따른 텍스트 설정
+              texts = {
+                  'ko': {
+                      'summary': '요약',
+                      'key_findings': '주요 발견사항',
+                      'detailed_analysis': '상세 분석',
+                      'conclusions': '결론 및 권장사항',
+                      'execution_time': '실행 시간',
+                      'no_artifacts': '생성된 아티팩트 없음',
+                      'generated_files': '생성된 파일'
+                  },
+                  'en': {
+                      'summary': 'Summary',
+                      'key_findings': 'Key Findings',
+                      'detailed_analysis': 'Detailed Analysis',
+                      'conclusions': 'Conclusions & Recommendations',
+                      'execution_time': 'Execution Time',
+                      'no_artifacts': 'No artifacts generated',
+                      'generated_files': 'Generated Files'
+                  }
+              }
+              
+              # 기본 언어를 한국어로 설정
+              t = texts.get(language, texts['ko'])
+              
+              # 마크다운 헤더 생성
+              md = f"# {report_title}\n\n"
+              
+              # 요약 섹션
+              md += f"## {t['summary']}\n\n"
+              md += f"이 보고서는 {len(analyses)}개의 분석 단계에서 생성된 결과를 종합한 것입니다.\n\n"
+              
+              # 주요 발견사항 섹션
+              md += f"## {t['key_findings']}\n\n"
+              for i, analysis in enumerate(analyses):
+                  try:
+                      print(f"분석 {i+1} 발견사항 추가: {analysis['name']}")
+                      md += f"- **{analysis['name']}**: {analysis['results']}\n"
+                  except Exception as e:
+                      print(f"분석 {i+1} 발견사항 추가 중 오류: {str(e)}")
+                      traceback.print_exc()
+              
+              md += f"\n## {t['detailed_analysis']}\n\n"
+              
+              # 각 분석 단계에 대한 상세 내용 추가
+              for i, analysis in enumerate(analyses):
+                  try:
+                      print(f"분석 {i+1} 상세 내용 추가: {analysis['name']}")
+                      md += f"### {analysis['name']}\n\n"
+                      md += f"*{t['execution_time']}: {analysis['time']}*\n\n"
+                      md += f"{analysis['results']}\n\n"
+                      
+                      md += f"#### {t['generated_files']}\n\n"
+                      
+                      if not analysis['artifacts']:
+                          print(f"분석 {i+1}: 아티팩트 없음")
+                          md += f"{t['no_artifacts']}\n\n"
+                      else:
+                          print(f"분석 {i+1}: {len(analysis['artifacts'])}개의 아티팩트 추가")
+                          for j, artifact in enumerate(analysis['artifacts']):
+                              try:
+                                  print(f"분석 {i+1}, 아티팩트 {j+1} 추가: {artifact['path']}")
+                                  md += f"- **{artifact['path']}**: {artifact['description']}\n"
+                                  
+                                  # 이미지 S3 URI가 있는 경우 이미지 참조 추가
+                                  if 's3_uri' in artifact:
+                                      print(f"분석 {i+1}, 아티팩트 {j+1}: 이미지 S3 URI 참조 추가")
+                                      s3_uri = artifact['s3_uri']
+                                      md += f"  *이미지 파일: {s3_uri}*\n\n"
+                                  # path 필드를 사용하여 이미지 참조 추가 (s3_uri가 없는 경우)
+                                  elif 'path' in artifact and (artifact['path'].lower().endswith('.jpg') or 
+                                                            artifact['path'].lower().endswith('.jpeg') or 
+                                                            artifact['path'].lower().endswith('.png') or 
+                                                            artifact['path'].lower().endswith('.gif')):
+                                      print(f"분석 {i+1}, 아티팩트 {j+1}: 이미지 경로 참조 추가 - {artifact['path']}")
+                                      md += f"  *이미지 파일: {artifact['path']}*\n\n"
+                              except Exception as e:
+                                  print(f"분석 {i+1}, 아티팩트 {j+1} 추가 중 오류: {str(e)}")
+                                  traceback.print_exc()
+                      
+                      md += "\n"
+                  except Exception as e:
+                      print(f"분석 {i+1} 상세 내용 추가 중 오류: {str(e)}")
+                      traceback.print_exc()
+              
+              # 결론 섹션 추가
+              md += f"## {t['conclusions']}\n\n"
+              md += "분석 결과를 종합하면, 다음과 같은 결론을 내릴 수 있습니다:\n\n"
+              
+              # 각 분석에서 주요 결론 추출
+              for i, analysis in enumerate(analyses):
+                  try:
+                      print(f"분석 {i+1} 결론 추출: {analysis['name']}")
+                      # 결과 텍스트에서 주요 문장 추출 (마지막 문장 또는 첫 문장)
+                      result_text = analysis['results']
+                      sentences = re.split(r'(?<=[.!?])\s+', result_text)
+                      
+                      if sentences:
+                          conclusion = sentences[-1] if len(sentences) > 1 else sentences[0]
+                          md += f"- {conclusion}\n"
+                  except Exception as e:
+                      print(f"분석 {i+1} 결론 추출 중 오류: {str(e)}")
+                      traceback.print_exc()
+              
+              print(f"마크다운 보고서 생성 완료: {len(md)} 문자")
+              return md.encode('utf-8'), 'text/markdown'
+
+          def convert_html_to_pdf(html_content, language='ko'):
+              """
+              HTML 내용을 PDF로 변환합니다.
+              
+              참고: Lambda 환경에서는 WeasyPrint 또는 다른 PDF 변환 라이브러리를 사용하기 위해
+              추가 설정이 필요합니다. 이 함수는 실제 구현을 위한 예시입니다.
+              
+              Parameters:
+              - html_content: HTML 내용 (바이트)
+              - language: 보고서 언어 ('ko' 또는 'en')
+              
+              Returns:
+              - PDF 내용 (바이트)
+              """
+              print(f"convert_html_to_pdf 함수 시작: HTML 길이={len(html_content)} 바이트")
+              try:
+                  # 실제 구현에서는 WeasyPrint 또는 다른 PDF 변환 라이브러리를 사용
+                  # 이 예시에서는 HTML 내용을 그대로 반환
+                  print("PDF 변환 라이브러리가 구현되지 않았습니다. HTML 내용을 그대로 반환합니다.")
+                  return html_content
+              except Exception as e:
+                  print(f"PDF 변환 중 오류 발생: {str(e)}")
+                  traceback.print_exc()
+                  # 오류 발생 시 HTML 내용을 그대로 반환
+                  return html_content
+
+          def lambda_handler(event, context):
+              """
+              Lambda 함수: 분석 결과를 기반으로 보고서를 생성하는 함수의 핸들러
+              
+              Parameters:
+              - event: Lambda 이벤트 객체
+              - context: Lambda 컨텍스트 객체
+              
+              Returns:
+              - 생성된 보고서 파일의 S3 URL을 포함하는 JSON 응답
+              """
+              print("lambda_handler 함수 시작")
+              print(f"이벤트: {json.dumps(event)}")
+              
+              try:
+                  action_group = event.get('actionGroup', '')
+                  message_version = event.get('messageVersion', '')
+                  function = event.get('function', '')
+                  
+                  print(f"액션 그룹: {action_group}, 메시지 버전: {message_version}, 함수: {function}")
+                  
+                  if function == 'generate_report':
+                      # 파라미터 추출
+                      s3_uri = get_named_parameter(event, "s3_uri")
+                      analyses_param = get_named_parameter(event, "analyses") or []
+                      report_format = get_named_parameter(event, "report_format") or 'html'
+                      report_title = get_named_parameter(event, "report_title") or '분석 보고서'
+                      report_language = get_named_parameter(event, "report_language") or 'ko'
+                      
+                      print(f"파라미터: s3_uri={s3_uri}, report_format={report_format}, report_title={report_title}")
+                      print(f"analyses 타입: {type(analyses_param)}, 길이: {len(analyses_param) if isinstance(analyses_param, list) else (len(analyses_param) if isinstance(analyses_param, str) else 'N/A')}")
+                      
+                      # analyses 파라미터 처리 강화
+                      print(f"analyses_param 타입: {type(analyses_param)}")
+                      
+                      # 문자열로 전달된 경우 파싱 시도
+                      if isinstance(analyses_param, str):
+                          print(f"analyses는 문자열입니다. 파싱 시도...")
+                          try:
+                              # JSON 파싱 시도
+                              analyses_param = json.loads(analyses_param)
+                              print("analyses를 JSON에서 파싱했습니다.")
+                          except json.JSONDecodeError:
+                              print("JSON 파싱 실패, Python 객체 표현 파싱 시도...")
+                              try:
+                                  # Python 객체 표현 파싱 시도
+                                  # 문자열 내의 작은따옴표를 큰따옴표로 변환하여 JSON 형식으로 만들기
+                                  analyses_str = analyses_param.replace("'", "\"")
+                                  # name=value 형식을 "name":"value" 형식으로 변환
+                                  analyses_str = re.sub(r'(\w+)=', r'"\1":', analyses_str)
+                                  try:
+                                      analyses_param = json.loads(analyses_str)
+                                      print("수정된 문자열을 JSON으로 파싱했습니다.")
+                                  except json.JSONDecodeError:
+                                      # 여전히 실패하면 일반 텍스트로 처리
+                                      print("JSON 파싱 실패, 일반 텍스트로 처리합니다.")
+                                      
+                                      # 텍스트를 분석 항목으로 변환
+                                      sections = re.split(r'\n\n+', analyses_param)
+                                      analyses_list = []
+                                      
+                                      for section in sections:
+                                          if not section.strip():
+                                              continue
+                                              
+                                          # 섹션 제목과 내용 분리
+                                          parts = section.split(':', 1)
+                                          if len(parts) == 2:
+                                              name = parts[0].strip()
+                                              results = parts[1].strip()
+                                              
+                                              # 분석 항목 생성
+                                              analysis_item = {
+                                                  "name": name,
+                                                  "time": datetime.now().strftime("%Y-%m-%d"),
+                                                  "results": results,
+                                                  "references": [],
+                                                  "artifacts": []
+                                              }
+                                              
+                                              analyses_list.append(analysis_item)
+                                      
+                                      if analyses_list:
+                                          analyses_param = analyses_list
+                                          print(f"텍스트를 {len(analyses_list)}개의 분석 항목으로 변환했습니다.")
+                                      else:
+                                          print("텍스트에서 분석 항목을 추출할 수 없습니다.")
+                                          analyses_param = []
+                              except Exception as e:
+                                  print(f"analyses 파싱 오류: {str(e)}")
+                                  traceback.print_exc()
+                                  
+                                  # 파싱 실패 시 텍스트를 단일 분석 항목으로 변환
+                                  analyses_param = [{
+                                      "name": "Analysis Results",
+                                      "time": datetime.now().strftime("%Y-%m-%d"),
+                                      "results": analyses_param,
+                                      "references": [],
+                                      "artifacts": []
+                                  }]
+                                  print("텍스트를 단일 분석 항목으로 변환했습니다.")
+                      # 딕셔너리인 경우 리스트로 변환
+                      elif isinstance(analyses_param, dict):
+                          print("analyses는 딕셔너리입니다. 리스트로 변환합니다.")
+                          analyses_param = [analyses_param]
+                      # 리스트가 아닌 경우 빈 리스트로 초기화
+                      elif not isinstance(analyses_param, list):
+                          print(f"analyses가 예상치 못한 타입입니다: {type(analyses_param)}. 빈 리스트로 초기화합니다.")
+                          analyses_param = []
+                      
+                      # analyses가 리스트인지 확인 (이 부분은 이제 필요 없음 - 위에서 모든 경우를 처리했기 때문)
+                      # 대신 analyses_param이 비어있는지 확인
+                      if not analyses_param:
+                          print("analyses 파라미터가 비어 있습니다.")
+                          return {
+                              'response': {
+                                  'actionGroup': action_group,
+                                  'function': function,
+                                  'functionResponse': {
+                                      'responseBody': {'TEXT': {'body': json.dumps({'error': 'analyses 파라미터가 비어 있습니다.'}, ensure_ascii=False)}}
+                                  }
+                              },
+                              'messageVersion': message_version
+                          }
+                      
+                      # analyses 객체 구조 수정
+                      analyses = []
+                      for analysis in analyses_param:
+                          print(f"분석 항목 처리: {type(analysis)}")
+                          
+                          # 문자열로 전달된 필드 처리
+                          if isinstance(analysis, str):
+                              try:
+                                  # 문자열 내의 작은따옴표를 큰따옴표로 변환하여 JSON 형식으로 만들기
+                                  analysis_str = analysis.replace("'", "\"")
+                                  # name=value 형식을 "name":"value" 형식으로 변환
+                                  analysis_str = re.sub(r'(\w+)=', r'"\1":', analysis_str)
+                                  try:
+                                      analysis = json.loads(analysis_str)
+                                      print("분석 항목을 JSON으로 파싱했습니다.")
+                                  except json.JSONDecodeError:
+                                      try:
+                                          analysis = ast.literal_eval(analysis)
+                                          print("분석 항목을 Python 객체로 파싱했습니다.")
+                                      except Exception as e:
+                                          print(f"분석 항목 파싱 실패: {analysis}, 오류: {str(e)}")
+                                          continue
+                              except Exception as e:
+                                  print(f"분석 항목 파싱 실패: {analysis}, 오류: {str(e)}")
+                                  continue
+                          
+                          # 필드 추출 및 정리
+                          name = analysis.get('name', '')
+                          time = analysis.get('time', datetime.now().strftime("%Y-%m-%d"))  # 시간이 없으면 현재 시간 사용
+                          results = analysis.get('results', '')
+                          
+                          # 필수 필드 확인
+                          if not name or not results:
+                              print(f"필수 필드가 없는 분석 결과: {analysis}")
+                              continue
+                          
+                          # references와 artifacts 필드 처리
+                          references = []
+                          artifacts = []
+                          
+                          # references 필드 처리
+                          if 'references' in analysis:
+                              if isinstance(analysis['references'], list):
+                                  references = analysis['references']
+                              elif isinstance(analysis['references'], str):
+                                  try:
+                                      # 문자열 내의 작은따옴표를 큰따옴표로 변환하여 JSON 형식으로 만들기
+                                      refs_str = analysis['references'].replace("'", "\"")
+                                      # name=value 형식을 "name":"value" 형식으로 변환
+                                      refs_str = re.sub(r'(\w+)=', r'"\1":', refs_str)
+                                      try:
+                                          references = json.loads(refs_str)
+                                          print("references를 JSON으로 파싱했습니다.")
+                                      except json.JSONDecodeError:
+                                          try:
+                                              references = ast.literal_eval(analysis['references'])
+                                              print("references를 Python 객체로 파싱했습니다.")
+                                          except Exception as e:
+                                              print(f"references 파싱 실패: {analysis['references']}, 오류: {str(e)}")
+                                  except Exception as e:
+                                      print(f"references 파싱 실패: {analysis['references']}, 오류: {str(e)}")
+                          
+                          # artifacts 필드 처리
+                          if 'artifacts' in analysis:
+                              if isinstance(analysis['artifacts'], list):
+                                  artifacts = analysis['artifacts']
+                              elif isinstance(analysis['artifacts'], str):
+                                  try:
+                                      # 문자열 내의 작은따옴표를 큰따옴표로 변환하여 JSON 형식으로 만들기
+                                      arts_str = analysis['artifacts'].replace("'", "\"")
+                                      # name=value 형식을 "name":"value" 형식으로 변환
+                                      arts_str = re.sub(r'(\w+)=', r'"\1":', arts_str)
+                                      try:
+                                          artifacts = json.loads(arts_str)
+                                          print("artifacts를 JSON으로 파싱했습니다.")
+                                      except json.JSONDecodeError:
+                                          try:
+                                              artifacts = ast.literal_eval(analysis['artifacts'])
+                                              print("artifacts를 Python 객체로 파싱했습니다.")
+                                          except Exception as e:
+                                              print(f"artifacts 파싱 실패: {analysis['artifacts']}, 오류: {str(e)}")
+                                  except Exception as e:
+                                      print(f"artifacts 파싱 실패: {analysis['artifacts']}, 오류: {str(e)}")
+                          
+                          # 정리된 객체 추가
+                          cleaned_analysis = {
+                              'name': name,
+                              'time': time,
+                              'results': results,
+                              'references': references,
+                              'artifacts': artifacts
+                          }
+                          
+                          print(f"정리된 분석 항목: {cleaned_analysis['name']}")
+                          analyses.append(cleaned_analysis)
+                      
+                      # 분석 결과가 비어있는지 확인
+                      if not analyses:
+                          print("분석 결과가 비어 있습니다.")
+                          return {
+                              'response': {
+                                  'actionGroup': action_group,
+                                  'function': function,
+                                  'functionResponse': {
+                                      'responseBody': {'TEXT': {'body': json.dumps({'error': '분석 결과가 제공되지 않았습니다.'}, ensure_ascii=False)}}
+                                  }
+                              },
+                              'messageVersion': message_version
+                          }
+                      
+                      print(f"정리된 analyses: {json.dumps(analyses, ensure_ascii=False)[:500]}...")
+                      
+                      # 함수 호출
+                      print("generate_report 함수 호출")
+                      output = generate_report(s3_uri, analyses, report_format, report_title, report_language)
+                      print(f"generate_report 함수 결과: {json.dumps(output, ensure_ascii=False)[:200]}...")
+                  else:
+                      print(f"지원되지 않는 함수: {function}")
+                      output = {
+                          'error': f"지원되지 않는 함수: {function}"
+                      }
+                  
+                  # Bedrock Agent 응답 형식으로 변환
+                  action_response = {
+                      'actionGroup': action_group,
+                      'function': function,
+                      'functionResponse': {
+                          'responseBody': {'TEXT': {'body': json.dumps(output, ensure_ascii=False)}}
+                      }
+                  }
+                  
+                  function_response = {'response': action_response, 'messageVersion': message_version}
+                  print(f"응답 생성 완료: {json.dumps(function_response, ensure_ascii=False)[:200]}...")
+                  return function_response
+              
+              except Exception as e:
+                  print(f"lambda_handler 함수 처리 중 오류 발생: {str(e)}")
+                  traceback.print_exc()
+                  
+                  # 오류 발생 시에도 Bedrock Agent 응답 형식으로 반환
+                  error_response = {
+                      'response': {
+                          'actionGroup': event.get('actionGroup', ''),
+                          'function': event.get('function', ''),
+                          'functionResponse': {
+                              'responseBody': {'TEXT': {'body': json.dumps({'error': f"처리 중 오류가 발생했습니다: {str(e)}"}, ensure_ascii=False)}}
+                          }
+                      },
+                      'messageVersion': event.get('messageVersion', '')
+                  }
+                  return error_response
+
+  LambdaGenerateReportPermissionForBedrockAgentAlias:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt LambdaFunctionGenerateReport.Arn
+      Principal: bedrock.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:agent-alias/*
+
+  LambdaGenerateReportPermissionForBedrockAgent:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt LambdaFunctionGenerateReport.Arn
+      Principal: bedrock.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:agent/*
+
+  ####################
+  # 모든 Bedrock Agent가 공통적으로 사용하는 execution Role
+  BedrockAgentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: BedrockAgentRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonBedrockFullAccess
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: bedrock.amazonaws.com
+          Action: sts:AssumeRole
+      
+#   # Bedrock Agent - product-insight-agent
+#   BedrockAgentProductInsight:
+#     Type: AWS::Bedrock::Agent
+#     Properties:
+#       ActionGroups: 
+#         - ActionGroupExecutor: 
+#             Lambda: !GetAtt LambdaFunctionPutS3Data.Arn
+#           ActionGroupName: "S3Actions"
+#           ActionGroupState: "ENABLED"
+#           # Description:
+#           FunctionSchema:
+#             Functions:
+#               - Name: "write_analysis_to_s3"
+#                 # Description:
+#                 Parameters:
+#                   references_json:
+#                     Description: "Reference sources list as JSON string"
+#                     Required: false
+#                     Type: string
+#                   agent_name:
+#                     Description: "Agent name"
+#                     Required: true
+#                     Type: string
+#                   s3_uri:
+#                     Description: "S3 URI (format: s3://bucket-name/prefix)"
+#                     Required: true
+#                     Type: string
+#                   artifacts_json:
+#                     Description: "Generated files list as JSON string"
+#                     Required: false
+#                     Type: string
+#                   description:
+#                     Description: "Analysis result description (first line is used as stage title)"
+#                     Required: true
+#                     Type: string
+#                 RequireConfirmation: "DISABLED"
+#               - Name: "read_analysis_from_s3"
+#                 # Description:
+#                 Parameters:
+#                   agent_name:
+#                     Description: "agent name to filter files"
+#                     Required: false
+#                     Type: string
+#                   s3_uri:
+#                     Description: "S3 URI (format: s3://bucket-name/prefix)"
+#                     Required: true
+#                     Type: string
+#                   file_name:
+#                     Description: "File name to read"
+#                     Required: false
+#                     Type: string
+#                 RequireConfirmation: "DISABLED"
+#               - Name: "list_analysis_files"
+#                 # Description:
+#                 Parameters:
+#                   agent_name:
+#                     Description: "agent name to filter files"
+#                     Required: false
+#                     Type: string
+#                   s3_uri:
+#                     Description: "S3 URI (format: s3://bucket-name/prefix)"
+#                     Required: true
+#                     Type: string
+#                 RequireConfirmation: "DISABLED"
+#               - Name: "delete_analysis_file"
+#                 # Description:
+#                 Parameters:
+#                   s3_uri:
+#                     Description: "S3 URI (format: s3://bucket-name/prefix)"
+#                     Required: true
+#                     Type: string
+#                   file_name:
+#                     Description: "File name to delete"
+#                     Required: true
+#                     Type: string
+#                 RequireConfirmation: "DISABLED"
+#       AgentName: "product-insight-agent"
+#       AgentResourceRoleArn: !GetAtt BedrockAgentRole.Arn
+#     #   Description: >
+#       FoundationModel: "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+#       Instruction: >
+#         # Role: Automotive Product Owner for AwsomeCar
+
+#         # Goal:
+#         Provide comprehensive marketing-focused insights and recommendations for automotive products by analyzing vehicle information from the knowledge base. Store your analysis results in S3 for integration with the report-writer-agent.
+
+#         # Guideline:
+#         1. CRITICAL: When receiving ANY request, FIRST extract the core vehicle/product, THEN immediately access the knowledge base
+#         2. Extract the main vehicle from requests like "Tesla Model Y에 대한 제품 분석해줘" → extract "Tesla Model Y"
+#         3. Based on the extracted vehicle, gather comprehensive information covering:
+#           - Technical specifications and general vehicle overview
+#           - Customer-reported advantages from real experiences
+#           - Notable features and unique selling points
+#           - Common pain points or concerns
+#           - Target customer profiles and competitive landscape analysis
+#         4. CRITICAL: Include reference sources for all data points and any relevant images in your analysis
+
+#         # Product Extraction Rules:
+#         - Look for vehicle names, models, or automotive products in the user's request
+#         - Ignore instructions like "제품 분석해줘", "정보 알려줘", etc.
+#         - If multiple products are mentioned, focus on the main one
+
+#         # Action Group Usage:
+
+#         ## S3Actions Action Group:
+#         - Function: "write_analysis_to_s3"
+#           - Parameters:
+#             ```json
+#             {
+#               "s3_uri": "s3://awsomecar-marketing-data/product-insights",
+#               "agent_name": "product-insight-agent",
+#               "description": "Vehicle Overview and Analysis\n\nYour detailed analysis text...",
+#               "references_json": "[{\"title\": \"Knowledge Base Source\", \"url\": \"internal://knowledge-base/vehicle-data\", \"query\": \"Vehicle specifications and customer feedback\"}]",
+#               "artifacts_json": "[{\"path\": \"s3://bucket-name/path/to/image1.jpg\", \"description\": \"Vehicle exterior view\"}]"
+#             }
+#             ```
+
+#         # S3 Data Storage Format:
+#         After completing your research, you MUST format your findings in the following standardized format and save to S3:
+
+#         ```
+#         ==================================================
+#         ## Analysis Stage: [Vehicle Name and Analysis Type]
+#         ## REFERENCE: [Main Reference Source]
+#         ## Execution Time: [Current Date and Time]
+#         --------------------------------------------------
+#         Result Description: 
+
+#         [Detailed vehicle analysis in bullet points or paragraphs]
+
+#         Key points:
+#         1. [First key insight]
+#         2. [Second key insight]
+#         3. [Third key insight]
+#         4. [Fourth key insight]
+
+#         --------------------------------------------------
+#         Generated Files:
+#         - [path/to/image1.png] : [Brief description of image]
+#         - [path/to/image2.jpg] : [Brief description of image]
+#         ==================================================
+#         ```
+
+#         # Complete Workflow:
+#         1. Extract vehicle/product from user request
+#         2. Access knowledge base for comprehensive information
+#         3. Process the information to create your analysis
+#         4. Format your analysis according to the S3 data storage format
+#         5. Call S3Actions.write_analysis_to_s3 to save your formatted analysis
+#         6. Inform the user that the analysis is complete and saved to S3
+
+#         # Analysis Topics to Cover:
+#         For each vehicle analysis, you should create separate analysis blocks covering:
+
+#         1. Vehicle Overview
+#         - Model introduction and positioning
+#         - Key specifications
+#         - Target market segment
+#         - Price positioning
+
+#         2. Vehicle Characteristics
+#         - Design elements
+#         - Technology features
+#         - Performance metrics
+#         - Interior/exterior highlights
+
+#         3. Customer Perspective
+#         - Most appreciated features
+#         - Value propositions
+#         - Common complaints
+#         - Areas for improvement
+
+#         4. Competitive Analysis
+#         - Direct competitors comparison
+#         - Unique advantages over competitors
+#         - Market position
+#         - Price-value proposition
+
+#         5. Additional Considerations
+#         - Long-term ownership aspects
+#         - Resale value projections
+#         - Special recommendations for specific customer needs
+
+#         CRITICAL INSTRUCTION:
+#         1. NEVER ask clarifying questions to the user
+#         2. ALWAYS extract the vehicle first, then proceed directly to accessing the knowledge base
+#         3. ENSURE all sections contain DETAILED content with specific examples and data points
+#         4. CRITICAL: Format your analysis according to the S3 template and save using write_analysis_to_s3
+#         5. CRITICAL: Inform the user that your analysis has been saved to S3 and provide the file path
+#         6. DO NOT send the full analysis to the user - only confirm that it has been saved to S3
+
+  # Bedrock Agent - market-analyst-agent
+  BedrockAgentMarketAnalysisAgent:
+    Type: AWS::Bedrock::Agent
+    Properties:
+      ActionGroups: 
+        - ActionGroupExecutor: 
+            Lambda: !GetAtt LambdaFunctionPutS3Data.Arn
+          ActionGroupName: "S3Actions"
+          ActionGroupState: "ENABLED"
+          # Description:
+          FunctionSchema:
+            Functions:
+              - Name: "write_analysis_to_s3"
+                # Description:
+                Parameters:
+                  references_json:
+                    Description: "Reference sources list as JSON string"
+                    Required: false
+                    Type: string
+                  agent_name:
+                    Description: "Agent name"
+                    Required: true
+                    Type: string
+                  s3_uri:
+                    Description: "S3 URI (format: s3://bucket-name/prefix)"
+                    Required: true
+                    Type: string
+                  artifacts_json:
+                    Description: "Generated files list as JSON string"
+                    Required: false
+                    Type: string
+                  description:
+                    Description: "Analysis result description (first line is used as stage title)"
+                    Required: true
+                    Type: string
+                RequireConfirmation: "DISABLED"
+              - Name: "read_analysis_from_s3"
+                # Description:
+                Parameters:
+                  agent_name:
+                    Description: "agent name to filter files"
+                    Required: false
+                    Type: string
+                  s3_uri:
+                    Description: "S3 URI (format: s3://bucket-name/prefix)"
+                    Required: true
+                    Type: string
+                  file_name:
+                    Description: "File name to read"
+                    Required: false
+                    Type: string
+                RequireConfirmation: "DISABLED"
+              - Name: "list_analysis_files"
+                # Description:
+                Parameters:
+                  agent_name:
+                    Description: "agent name to filter files"
+                    Required: false
+                    Type: string
+                  s3_uri:
+                    Description: "S3 URI (format: s3://bucket-name/prefix)"
+                    Required: true
+                    Type: string
+                RequireConfirmation: "DISABLED"
+              - Name: "delete_analysis_file"
+                # Description:
+                Parameters:
+                  s3_uri:
+                    Description: "S3 URI (format: s3://bucket-name/prefix)"
+                    Required: true
+                    Type: string
+                  file_name:
+                    Description: "File name to delete"
+                    Required: true
+                    Type: string
+                RequireConfirmation: "DISABLED"
+              - Name: "process_tavily_images"
+                # Description:
+                Parameters:
+                  agent_name:
+                    Description: "Agent name"
+                    Required: true
+                    Type: string
+                  s3_uri: 
+                    Description: "S3 URI (format: s3://bucket-name/prefix)"
+                    Required: true
+                    Type: string
+                  tavily_response:
+                    Description: "Tavily API response (JSON object or string)"
+                    Required: true
+                    Type: string
+                RequireConfirmation: "DISABLED"
+        - ActionGroupExecutor: 
+            Lambda: !GetAtt LambdaFunctionAgentWebSearch.Arn
+          ActionGroupName: "WebSearch"
+          ActionGroupState: "ENABLED"
+          # Description:
+          FunctionSchema:
+            Functions:
+              - Name: multi_search
+                # Description:
+                Parameters:
+                  target_website:
+                    Description: "The specific website to search including its domain name. If not provided, the most relevant website will be used"
+                    Required: false
+                    Type: string
+                  search_queries:
+                    Description: "The queries to search the web with"
+                    Required: false
+                    Type: array
+                  topic:
+                    Description: "The topic being searched. 'news' or 'general'. Helps narrow the search when news is the focus."
+                    Required: false
+                    Type: string
+                  days:
+                    Description: "The number of days of history to search. Helps when looking for recent events or news."
+                    Required: false
+                    Type: string
+                RequireConfirmation: "DISABLED"
+      AgentName: "market-analyst-agent"
+      AgentResourceRoleArn: !GetAtt BedrockAgentRole.Arn
+    #   Description: >
+    #     Key Functions - 
+    #       1/ Identify 2-3 of proper search queries in user requests, 
+    #       2/ Perform searches on the web, 
+    #       3/ Create product insights based on search results, and transform them into requested forms
+      FoundationModel: "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+      Instruction: > 
+        # Role: Market Analyst for AwsomeCar
+
+        # Goal:
+        Conduct comprehensive market research on automotive products and trends, then format the results in a standardized format that can be stored in S3 for further processing by the report-writer-agent.
+
+        # Guideline:
+        1. CRITICAL: When receiving ANY request, FIRST extract the core product/topic, THEN immediately execute the multi_search function
+        2. Extract the main product from requests like "Tesla Model Y에 대한 마케팅 보고서 작성해줘" → extract "Tesla Model Y"
+        3. Based on the extracted product, automatically generate 3-4 highly specific search queries covering:
+          - Market size and growth trends for the specific product/industry in the target market
+          - Detailed competitor analysis including market share and strategies
+          - Target audience demographics, psychographics, and behaviors in the specific market
+          - Regulatory factors, local market challenges, and consumer preferences
+        4. Call the multi_search Lambda function ONCE with your selected queries as an array
+        5. CRITICAL: For EACH data point, statistic, or claim in your analysis, you MUST include the reference source
+        6. CRITICAL: Process all images from the search results using the process_tavily_images function
+
+        # Product Extraction Rules:
+        - Look for vehicle names, models, or automotive products in the user's request
+        - Ignore instructions like "마케팅 보고서 작성해줘", "분석해줘", etc.
+        - If multiple products are mentioned, focus on the main one
+        - Examples:
+          - "Tesla Model Y에 대한 마케팅 보고서 작성해줘" → "Tesla Model Y"
+          - "현대 아이오닉 5와 기아 EV6 비교 분석해줘" → "현대 아이오닉 5, 기아 EV6"
+          - "최신 전기차 시장 트렌드 알려줘" → "전기차"
+
+        # Action Group Usage:
+
+        ## 1. WebSearch Action Group:
+        - Function: "multi_search"
+        - Parameters:
+          ```json
+          {
+            "search_queries": ["query1", "query2", "query3", "query4"]
+          }
+          ```
+        - IMPORTANT: The search_queries parameter must be a proper JSON array, not a string.
+
+        ## 2. S3Actions Action Group:
+        - Function: "process_tavily_images"
+          - Parameters:
+            ```json
+            {
+              "s3_uri": "s3://awsomecar-marketing-data/market-analysis",
+              "agent_name": "market-analyst-agent",
+              "tavily_response": "<tavily_response_as_json_string>"
+            }
+            ```
+
+        - Function: "write_analysis_to_s3"
+          - Parameters:
+            ```json
+            {
+              "s3_uri": "s3://awsomecar-marketing-data/market-analysis",
+              "agent_name": "market-analyst-agent",
+              "description": "Market Overview and Size\n\nYour detailed analysis text...",
+              "references_json": "[{\"url\": \"https://example.com/article1\", \"title\": \"Article Title\", \"query\": \"Search query used\"}]",
+              "artifacts_json": "[{\"path\": \"s3://bucket-name/path/to/image1.jpg\", \"description\": \"Image description\"}]"
+            }
+            ```
+
+        # S3 Data Storage Format:
+        After completing your research, you MUST format your findings in the following standardized format and save to S3:
+
+        ```
+        ==================================================
+        ## Analysis Stage: [Topic Name]
+        ## REFERENCE: [Main Reference Source]
+        ## Execution Time: [Current Date and Time]
+        --------------------------------------------------
+        Result Description: 
+
+        [Detailed research findings in bullet points or paragraphs]
+
+        Key points:
+        1. [First key insight]
+        2. [Second key insight]
+        3. [Third key insight]
+        4. [Fourth key insight]
+
+        --------------------------------------------------
+        Generated Files:
+        - [path/to/image1.png] : [Brief description of image]
+        - [path/to/image2.jpg] : [Brief description of image]
+        ==================================================
+        ```
+
+        # Complete Workflow:
+        1. Extract product/topic from user request
+        2. Generate 3-4 specific search queries
+        3. Call WebSearch.multi_search function with these queries
+        4. Process the search results to create your analysis
+        5. Call S3Actions.process_tavily_images to save all images to S3
+        6. Format your analysis according to the S3 data storage format
+        7. Call S3Actions.write_analysis_to_s3 to save your formatted analysis
+        8. Inform the user that the analysis is complete and saved to S3
+
+        # Research Topics to Cover:
+        For each product analysis, you should create separate analysis blocks covering:
+        1. Market Overview and Size
+        2. Competitor Analysis
+        3. Target Audience Demographics
+        4. Consumer Trends and Preferences
+        5. Regulatory Environment
+        6. Sales and Marketing Strategies
+
+        CRITICAL INSTRUCTION:
+        1. NEVER ask clarifying questions to the user
+        2. ALWAYS extract the product first, then proceed directly to executing the multi_search function
+        3. ENSURE all sections contain DETAILED content with specific examples, data points, and actionable insights
+        4. Include SPECIFIC NUMBERS, PERCENTAGES, and DATA POINTS throughout your analysis
+        5. CRITICAL: After completing your research, save all images to S3 using process_tavily_images
+        6. CRITICAL: Format your analysis according to the S3 template and save using write_analysis_to_s3
+        7. CRITICAL: Inform the user that your analysis has been saved to S3 and provide the file path
+        8. DO NOT send the full analysis to the user - only confirm that it has been saved to S3
+
+  # Bedrock Agent - reporter-agent
+  BedrockAgentReporter:
+    Type: AWS::Bedrock::Agent
+    Properties:
+      ActionGroups: 
+        - ActionGroupExecutor: 
+            Lambda: !GetAtt LambdaFunctionGenerateReport.Arn
+          ActionGroupName: "generate_report"
+          ActionGroupState: "ENABLED"
+          # Description:
+          FunctionSchema:
+            Functions:
+              - Name: "generate_report"
+                Description: > 
+                  - bucket_name: S3 버킷 이름
+                  - prefix: S3 객체 접두사 (폴더 경로)
+                  - analyses: get_s3_data 함수에서 반환된 분석 결과
+                  - report_format: 보고서 형식 ('html', 'pdf', 'markdown' 중 하나)
+                  - report_title: 보고서 제목
+                  - report_language: 보고서 언어 ('ko' 또는 'en')
+                Parameters:
+                  analyses:
+                    Description: "Analyses results returned from get_s3_data action"
+                    Required: true
+                    Type: string
+                  report_title:
+                    Description: "보고서 제목"
+                    Required: false
+                    Type: string
+                  report_format:
+                    Description: "보고서 형식 ('html', 'pdf', 'markdown' 중 하나)"
+                    Required: false
+                    Type: string
+                  s3_uri:
+                    Description: "S3 URI (format: s3://bucket-name/prefix)"
+                    Required: true
+                    Type: string
+                  report_language:
+                    Description: "report language (default: 'ko')"
+                    Required: false
+                    Type: string
+                RequireConfirmation: "DISABLED"
+        - ActionGroupExecutor: 
+            Lambda: !GetAtt LambdaFunctionGetS3Data.Arn
+          ActionGroupName: "get_s3_data"
+          ActionGroupState: "ENABLED"
+          # Description:
+          FunctionSchema:
+            Functions:
+              - Name: "get_s3_data"
+                Description: > 
+                  - bucket_name: S3 버킷 이름
+                  - prefix: S3 객체 접두사 (폴더 경로)
+                  - results_file: 결과 파일 이름 (기본값: 'all_results.txt')
+                  - load_images: 이미지 파일도 로드할지 여부 (기본값: True)
+                Parameters:
+                  load_images:
+                    Description: "이미지 파일도 로드할지 여부 (기본값: True)"
+                    Required: false
+                    Type: boolean
+                  s3_uri:
+                    Description: "S3 URI (format: s3://bucket-name/prefix)"
+                    Required: true
+                    Type: string
+                RequireConfirmation: "DISABLED"    
+      AgentName: "reporter-agent"
+      AgentResourceRoleArn: !GetAtt BedrockAgentRole.Arn
+    #   Description: >
+      FoundationModel: "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+      Instruction: >
+        ---
+        CURRENT_TIME: {CURRENT_TIME}
+        USER_REQUEST: {USER_REQUEST}
+        ---
+
+        당신은 제공된 정보와 검증 가능한 사실만을 기반으로 명확하고 포괄적인 보고서를 작성하는 전문 리포트 작성자입니다.
+
+        <역할>
+        당신은 다음과 같은 객관적이고 분석적인 리포트 작성자로 행동해야 합니다.
+        - 사실을 정확하고 공정하게 제시
+        - 정보를 논리적으로 구성
+        - 주요 발견사항과 인사이트를 강조
+        - 명확하고 간결한 언어 사용
+        - 제공된 정보에만 엄격하게 의존
+        - 정보를 조작하거나 가정하지 않음
+        - 사실과 분석을 명확히 구분
+        </역할>
+
+        <분석_결과_사용_지침>
+        1. **데이터 로딩 및 처리**:
+          - S3에서 분석 결과 파일과 이미지를 로드하기 위해 get_s3_data 액션을 호출해야 합니다.
+          - 사용자가 제공한 s3_uri를 사용하여 S3에서 데이터를 로드합니다.
+          - get_s3_data 액션은 제공된 S3 prefix 하위의 모든 분석 결과를 자동으로 발견하고 로드합니다:
+            - product-insights/ 디렉토리의 모든 .txt 파일
+            - market-analysis/ 디렉토리의 모든 .txt 파일  
+            - images/ 디렉토리의 모든 이미지 파일
+          - 분석 결과는 다음 형식으로 구성됩니다:
+          ==================================================
+          ## Analysis Stage: 단계_이름
+          ## Execution Time: 현재_시간
+          --------------------------------------------------
+          Result Description: [분석 결과 설명]
+          
+          References:
+          1. [제목](URL) - Query: 검색어
+          2. [제목](URL) - Query: 검색어
+          
+          Generated Files:
+          - [파일_경로1] : [설명1]
+          - [파일_경로2] : [설명2]
+          ==================================================
+
+        2. **보고서 작성**:
+        - S3에서 로드한 모든 분석 결과(product-insights와 market-analysis)를 보고서에 체계적으로 포함합니다. generate_report 액션을 호출해야 합니다.
+        - 각 분석 단계에 대한 상세 섹션 작성
+        - [중요] S3에서 로드한 생성된 아티팩트(이미지, 차트)를 사용하여 분석 결과 설명 (중요: generate_report 액션을 꼭 사용합니다)
+        - 각 분석 단계에서 생성된 모든 아티팩트(이미지, 파일 등)에 대한 상세 설명 제공(중요성, 보여주는 패턴, 주요 인사이트 포함)
+        - 필요한 경우 시각화 자료 생성 및 추가
+        - 가독성과 효율성을 높이기 위해 적절한 곳에 표 사용
+        - 파일에 포함된 모든 정보를 사용하여 포괄적인 결론 작성
+        - 참조 출처(References) 정보를 포함하여 정보의 신뢰성 제공
+        </분석_결과_사용_지침>
+
+        <S3_데이터_접근>
+        1. **S3 데이터 접근 방법**:
+          - 분석 결과 및 이미지 파일은 S3 URI로 지정된 위치에 저장되어 있습니다
+          - 사용자가 제공한 s3_uri 파라미터를 사용하여 데이터를 로드해야 합니다
+          - 데이터를 로드하기 위해 'get_s3_data' Lambda 액션을 호출하세요
+          - get_s3_data 액션은 제공된 S3 prefix 하위의 다음 구조에서 데이터를 자동으로 발견합니다:
+            ```
+            s3://bucket-name/prefix/
+            ├── product-insights/
+            │   ├── product-insight-agent_*.txt
+            │   └── images/
+            │       └── *.jpg, *.png
+            ├── market-analysis/
+            │   ├── market-analyst-agent_*.txt
+            │   └── images/
+            │       └── *.jpg, *.png
+            ```
+          - 예시: s3://awsomecar-marketing-data/20250619-1530-tesla-model-y/
+
+        2. **이미지 및 차트 처리**:
+          - 이미지 파일은 S3 URI 형태로 참조됩니다
+          - 실제 이미지 데이터는 generate_report 함수에서 S3에서 직접 로드합니다
+          - 보고서에 이미지를 포함할 때 적절한 캡션과 설명을 추가하세요
+          - 모든 이미지 참조는 S3 URI를 사용해야 합니다
+          - 이미지는 product-insights/images/ 또는 market-analysis/images/ 디렉토리에서 로드됩니다
+        </S3_데이터_접근>
+
+        <보고서_구조>
+        1. 요약
+          - 전체 분석의 목적과 주요 결과 요약
+
+        2. 주요 발견사항
+          - 모든 분석에서 발견된 가장 중요한 인사이트 정리
+
+        3. 상세 분석
+          - S3에서 로드한 각 분석 결과에 대한 개별 섹션 생성
+          - Product Insights 섹션: product-insights/ 디렉토리에서 로드한 분석 결과
+          - Market Analysis 섹션: market-analysis/ 디렉토리에서 로드한 분석 결과
+          - 각 섹션은 다음을 포함해야 합니다:
+              - 상세한 분석 설명 및 방법론
+              - 상세한 분석 결과 및 인사이트
+              - 관련 시각화 및 아티팩트 참조
+              - 참조 출처 정보
+
+        4. 결론 및 권장사항
+          - 모든 분석 결과를 기반으로 한 포괄적인 결론
+          - 데이터 기반 권장사항 및 다음 단계 제안
+        </보고서_구조>
+
+        <보고서_출력_형식>
+        - 보고서는 사용자 요청에 따라 여러 형식으로 저장될 수 있습니다:
+          1. HTML (기본값): 항상 HTML 형식으로 보고서 제공
+          2. PDF: 사용자가 명시적으로 요청할 때 (예: "PDF로 저장", "PDF 형식으로 제공")
+          3. 마크다운: 사용자가 명시적으로 요청할 때 (예: "마크다운으로 저장", "MD 형식으로 제공")
+
+        - 출력 형식에 관계없이 모든 보고서는 다음을 포함해야 합니다:
+          1. 모든 분석 단계의 결과
+          2. S3에서 로드한 모든 이미지 및 차트
+          3. 명확한 섹션 구분 및 구조화된 내용
+          4. 적절한 형식 지정 및 스타일링
+        </보고서_출력_형식>
+
+        <data_integrity>
+        - 텍스트 파일에 명시적으로 언급된 정보만 사용
+        - 누락된 데이터는 "정보가 제공되지 않음"으로 표시
+        - 허구의 예시나 시나리오를 만들지 않음
+        - 데이터가 불완전해 보이는 경우 명확히 언급
+        - 누락된 정보에 대해 가정하지 않음
+        </data_integrity>
+
+        <참고사항>
+        - 각 보고서는 간략한 개요로 시작
+        - 가능한 경우 관련 데이터 및 지표 포함
+        - 실행 가능한 인사이트로 결론 작성
+        - 명확성과 정확성 검토
+        - 정보의 불확실성 인정
+        - 제공된 소스 자료에서 검증 가능한 사실만 포함
+        - [중요] 사용자 요청과 동일한 언어 유지
+        - 한국어 폰트로는 'NanumGothic'만 사용
+        </참고사항>
+
+        <generate_report_액션_사용_지침>
+        generate_report 액션을 호출할 때는 다음 형식으로 analyses 파라미터를 구성해야 합니다:
+
+        ```json
+        [
+          {
+            "name": "분석 제목",
+            "time": "YYYY-MM-DD",
+            "results": "분석 결과 설명",
+            "references": [],
+            "artifacts": [
+              {
+                "path": "s3://bucket-name/prefix/images/image.jpg",
+                "description": "이미지 설명"
+              }
+            ]
+          }
+        ]
+        ```
+
+        중요: analyses 파라미터는 반드시 위와 같은 JSON 배열 형식으로 전달해야 합니다. 단순 텍스트 형식으로 전달하면 Lambda 함수에서 파싱 오류가 발생합니다.
+
+        각 분석 항목에는 다음 필드가 포함되어야 합니다:
+        - name: 분석 제목 (필수)
+        - time: 분석 시간 (YYYY-MM-DD 형식)
+        - results: 분석 결과 설명 (필수)
+        - references: 참조 정보 배열 (선택, 빈 배열 가능)
+        - artifacts: 아티팩트 정보 배열 (선택, 빈 배열 가능)
+
+        이미지 처리를 위한 중요 지침:
+        1. 이미지 파일은 반드시 artifacts 배열 내에 path 필드로 지정해야 합니다.
+        2. path 필드는 S3 URI 형식(s3://bucket-name/prefix/images/image.jpg)이어야 합니다.
+        3. 중요: 이미지 경로는 사용자가 제공한 s3_uri에 "/images/" 폴더를 추가한 경로여야 합니다.
+          예: 사용자가 "s3://awsomecar-marketing-data/hyundai-ionic-northamerica"를 제공했다면,
+          이미지 경로는 "s3://awsomecar-marketing-data/hyundai-ionic-northamerica/images/image.jpg" 형식이어야 합니다.
+        4. 각 이미지에는 description 필드를 통해 설명을 제공해야 합니다.
+        5. 지원되는 이미지 형식: jpg, jpeg, png, gif
+
+        불렛 포인트와 줄바꿈 처리를 위한 지침:
+        1. 불렛 포인트는 '•' 기호를 사용하여 표시합니다.
+        2. 하위 불렛 포인트는 '-' 기호를 사용합니다.
+        3. 불렛 포인트 앞뒤로 줄바꿈을 추가하여 구분합니다.
+        4. 단락 사이에는 빈 줄을 추가하여 구분합니다.
+
+        예시:
+        ```json
+        [
+          {
+            "name": "Market Overview and Performance",
+            "time": "2025-01-24",
+            "results": "The Hyundai IONIQ 5 has shown remarkable growth in the North American market.\n\n• Sales Performance:\n- 2024 Total Sales: 44,400 units in US market (+31% YoY)\n- December 2024 sales: 4,595 units (+41% vs Dec 2023)\n- Q4 2024 sales: 14,082 units (+64% vs Q4 2023)\n\n• Market Position:\n- Ranks among top-selling electric SUVs\n- Leading Hyundai's electrified vehicle lineup\n- Significant contribution to total sales",
+            "references": [],
+            "artifacts": [
+              {
+                "path": "s3://awsomecar-marketing-data/hyundai-ionic-northamerica/images/ioniq5.jpg",
+                "description": "IONIQ 5 exterior view"
+              }
+            ]
+          }
+        ]
+        ```
+
+        위 예시에서 볼 수 있듯이, 불렛 포인트 앞뒤로 줄바꿈(\n\n)을 추가하고, 하위 불렛 포인트는 줄바꿈과 함께 '-' 기호를 사용합니다. 이렇게 하면 보고서에서 불렛 포인트가 올바르게 표시됩니다.
+        </generate_report_액션_사용_지침>
+
+  # S3 Bucket for storing generated PDF reports
+  S3BucketAgent:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "awsomecar-marketing-data-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
